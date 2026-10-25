@@ -65,7 +65,7 @@ linxts config show         Show effective MVP settings
 linxts doctor              Inspect local prerequisites
 ```
 
-Compilation flags include `--aggressive` (default), `--strict`, `--offline`, `--no-ai`, `--show-ir`, `--verbose`, and `--fun-errors`.
+Compilation flags include `--aggressive` (default), `--strict`, `--offline`, `--no-ai`, `--no-cache`, `--show-ir`, `--verbose`, and `--fun-errors`.
 
 ## Examples
 
@@ -115,7 +115,7 @@ The current VM prints `10` and `50` for the mixed example.
 | llama.cpp structured fallback and 3B → 7B → larger-local escalation | Implemented, opt-in configuration |
 | AI timeout, retry, cancellation token, token/context budget, health check | Implemented |
 | Online model providers | Not implemented; router authorization gate exists |
-| Compilation cache | Planned |
+| Compilation cache | Implemented for successful validated compilations; native artifacts not cached yet |
 | Native Linux ELF backend | Planned; `build` is not native |
 
 Language adapters intentionally preserve distinct semantics as the project grows; syntax resemblance does not imply Python, JavaScript, and Rust are interchangeable.
@@ -138,6 +138,10 @@ linxts models test
 The client uses llama.cpp's native `/health` and `/completion` endpoints. CLI configuration rejects non-loopback URLs to avoid accidentally uploading source to an untrusted host. `LINXTS_AI_TIMEOUT_SECS` (1–600) and `LINXTS_AI_RETRIES` (0–5) control bounded inference. `--no-ai` prevents all model calls; `--offline` permits local endpoints but reserves the online tier as disabled.
 
 Every completion must contain a strict versioned candidate envelope. Source hash, schema version, side effects, scopes, calls, error nodes, and the entire IR are validated before the compiler replaces deterministic parse errors. Invalid JSON or IR escalates to the next configured local tier. No online provider is implemented or contacted.
+
+## Compilation cache
+
+Successful validated compilations—including deterministic detection/repair data or an accepted AI candidate—are cached under `$LINXTS_CACHE_DIR`, `$XDG_CACHE_HOME/linxts`, or `~/.cache/linxts`. Keys include source/context/dependency hashes, compiler and IR schema versions, model identities, repair mode, target, and compile options. Cache entries are size-bounded, written atomically, version-checked, source-bound, and revalidated before use. Use `--no-cache` or `LINXTS_DISABLE_CACHE=1` to bypass it. Native artifacts are not cached yet.
 
 ## Safety and privacy
 

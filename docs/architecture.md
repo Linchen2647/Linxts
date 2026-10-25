@@ -4,7 +4,7 @@ Linxts is split into a small number of working crates rather than one crate per 
 
 - `linxts-source`: bounded UTF-8 loading, snapshots, source IDs, spans, and Unicode positions.
 - `linxts-ir`: Unified IR v0.1 plus structural, scope, call, and error-node validation.
-- `linxts-compiler`: hints, staged detection, lexer, tolerant parser, deterministic repair, natural-language deterministic lowering, and pipeline diagnostics.
+- `linxts-compiler`: hints, staged detection, lexer, tolerant parser, deterministic repair, natural-language deterministic lowering, pipeline diagnostics, and validated compilation cache.
 - `linxts-runtime`: local tree-walking VM with loop and call-depth limits.
 - `linxts-ai`: versioned candidate protocol, safety validation, native llama.cpp HTTP client, and bounded model escalation.
 - `linxts-cli`: user-facing commands, optional AI orchestration, and stable exit-code boundaries.
@@ -20,7 +20,8 @@ Linxts is split into a small number of working crates rather than one crate per 
 7. The deterministic IR validator rejects schema mismatches, unresolved error nodes, scope errors, bad calls, and excessive nesting.
 8. If only parser/validation errors remain and AI is enabled, configured local llama.cpp tiers are tried in 3B → 7B → larger order. The router bounds health checks, retries, time, prompt/response size, context, output, cancellation, and escalation.
 9. Candidate JSON is decoded with unknown fields denied, bound to the active source hash, restricted to pure/output effects, and passed through the IR validator again.
-10. `run` executes valid IR in the VM. `build` serializes valid IR as a `.lxb` artifact.
+10. Successful compilations are atomically cached under a versioned content key; every hit is size/version/source checked and its IR is revalidated.
+11. `run` executes valid IR in the VM. `build` serializes valid IR as a `.lxb` artifact.
 
 ## Trust boundaries
 

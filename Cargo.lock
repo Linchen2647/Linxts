@@ -207,6 +207,8 @@ dependencies = [
  "linxts-source",
  "serde",
  "serde_json",
+ "sha2",
+ "thiserror",
 ]
 
 [[package]]

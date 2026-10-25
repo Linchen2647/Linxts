@@ -1,11 +1,13 @@
 //! Linxts deterministic compiler pipeline.
 
+mod cache;
 mod detector;
 mod hints;
 mod lexer;
 mod parser;
 mod repair;
 
+pub use cache::{CacheError, CacheKeyInput, CompilationCache};
 pub use detector::{Detection, LanguageDetector};
 pub use hints::{Hint, HintScanner, Language, Segment, classify_alias};
 pub use parser::ParseDiagnostic;
@@ -22,7 +24,7 @@ use parser::{ParsedUnit, Parser};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompileOptions {
     pub aggressive: bool,
     pub strict: bool,
@@ -72,7 +74,7 @@ pub struct Diagnostic {
     pub suggestion: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Compilation {
     pub module: Module,
     pub detection: Detection,

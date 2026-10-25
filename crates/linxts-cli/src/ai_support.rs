@@ -222,6 +222,20 @@ pub fn configured_count() -> usize {
         .count()
 }
 
+pub fn cache_model_identity() -> Option<String> {
+    let models = ENDPOINTS
+        .iter()
+        .filter_map(|endpoint| {
+            std::env::var_os(endpoint.variable).map(|_| {
+                let model = std::env::var(endpoint.model_variable)
+                    .unwrap_or_else(|_| endpoint.default_model.to_owned());
+                format!("{:?}:{model}", endpoint.tier)
+            })
+        })
+        .collect::<Vec<_>>();
+    (!models.is_empty()).then(|| models.join("|"))
+}
+
 fn eligible_for_ai(compilation: &Compilation) -> bool {
     let errors: Vec<_> = compilation
         .diagnostics

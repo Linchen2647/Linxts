@@ -14,7 +14,7 @@
 - [x] representative unit and integration tests
 - [x] GitHub Actions configuration
 - [ ] broader Python indentation and JavaScript/Rust subset coverage
-- [ ] compilation cache
+- [x] compilation cache for successful validated compilations
 
 ## Phase 2 — AI compilation
 
@@ -23,7 +23,7 @@
 - [x] local 3B → 7B → optional larger model escalation
 - [x] timeout, retry, cancellation, and context/token budgets
 - [x] mock provider and offline CI tests
-- [ ] validated AI candidate cache
+- [x] validated AI candidate stored in the compilation cache
 - [ ] explicitly authorized, extensible online provider interface
 
 ## Phase 3 — Mixed language

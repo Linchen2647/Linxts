@@ -14,6 +14,7 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Versioned AI candidate protocol, recursive IR JSON Schema, and safety validation.
 - Local llama.cpp HTTP client with health checks and 3B → 7B → larger escalation.
 - Inference timeout, retry, cancellation, size/context/token, and authorization limits.
+- Versioned, atomic, size-bounded compilation cache with IR revalidation.
 - CI configuration, documentation, examples, and tests.
 
 ### Not yet available

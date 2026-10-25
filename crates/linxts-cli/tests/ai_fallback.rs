@@ -31,6 +31,7 @@ fn cli_uses_validated_local_ai_fallback() {
         .arg("run")
         .arg(&path)
         .arg("--verbose")
+        .arg("--no-cache")
         .env("LINXTS_LLAMA_3B_URL", endpoint)
         .env("LINXTS_LLAMA_3B_MODEL", "mock-3b")
         .env_remove("LINXTS_LLAMA_7B_URL")
