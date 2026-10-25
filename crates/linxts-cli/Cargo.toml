@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 clap.workspace = true
 linxts-ai = { path = "../linxts-ai" }
+linxts-backend = { path = "../linxts-backend" }
 linxts-compiler = { path = "../linxts-compiler" }
 linxts-ir = { path = "../linxts-ir" }
 linxts-runtime = { path = "../linxts-runtime" }

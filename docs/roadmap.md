@@ -36,10 +36,11 @@
 
 ## Phase 4 — Native compilation
 
+- [x] system-C bootstrap backend producing a standalone Linux executable
+- [x] native executable integration test
 - [ ] evaluate Cranelift and LLVM against the IR and runtime requirements
-- [ ] define runtime ABI
-- [ ] Linux x86_64 object/link pipeline
-- [ ] standalone ELF integration tests
+- [ ] define stable runtime ABI
+- [ ] direct Linux x86_64 object/link pipeline
 - [ ] optimizations and release artifacts
 
 ## Phase 5 — Ecosystem

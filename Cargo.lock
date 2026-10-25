@@ -187,11 +187,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "linxts-backend"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "linxts-ir",
+ "thiserror",
+]
+
+[[package]]
 name = "linxts-cli"
 version = "0.1.0-alpha.1"
 dependencies = [
  "clap",
  "linxts-ai",
+ "linxts-backend",
  "linxts-compiler",
  "linxts-ir",
  "linxts-runtime",

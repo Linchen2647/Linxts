@@ -1,6 +1,7 @@
 mod ai_support;
 
 use clap::{Args, Parser, Subcommand};
+use linxts_backend::{CBootstrapBackend, NativeBuildOptions};
 use linxts_compiler::{
     CacheKeyInput, Compilation, CompilationCache, CompileOptions, Compiler, Diagnostic, Severity,
 };
@@ -18,11 +19,14 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Compile a .lx file to a versioned VM artifact (.lxb).
+    /// Compile a .lx file to a VM artifact or native executable.
     Build {
         source: PathBuf,
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Emit a .lxb VM artifact instead of a native executable.
+        #[arg(long)]
+        vm: bool,
         #[command(flatten)]
         flags: CompileFlags,
     },
@@ -120,6 +124,7 @@ fn run(cli: Cli) -> Result<(), u8> {
         Command::Build {
             source,
             output,
+            vm,
             flags,
         } => {
             let (source_file, compilation) = compile_path(&source, &flags)?;
@@ -128,22 +133,39 @@ fn run(cli: Cli) -> Result<(), u8> {
                 emit_diagnostics(&source_file, &compilation.diagnostics, flags.fun_errors);
                 return Err(1);
             }
-            let output = output.unwrap_or_else(|| source.with_extension("lxb"));
-            let json = serde_json::to_vec_pretty(&compilation.module).map_err(|error| {
-                eprintln!("[ERROR LXT-BLD-001] Failed to encode VM artifact: {error}");
-                2
-            })?;
-            std::fs::write(&output, json).map_err(|error| {
+            if !vm {
+                let output = output.unwrap_or_else(|| source.with_extension(""));
+                CBootstrapBackend::build(
+                    &compilation.module,
+                    &output,
+                    &NativeBuildOptions::default(),
+                )
+                .map_err(|error| {
+                    eprintln!("[ERROR LXT-BLD-003] Native build failed: {error}");
+                    2
+                })?;
                 eprintln!(
-                    "[ERROR LXT-BLD-002] Failed to write {}: {error}",
+                    "[OK] Wrote native executable: {} (system C bootstrap backend)",
                     output.display()
                 );
-                2
-            })?;
-            eprintln!(
-                "[OK] Wrote Linxts VM artifact: {} (not a native executable)",
-                output.display()
-            );
+            } else {
+                let output = output.unwrap_or_else(|| source.with_extension("lxb"));
+                let json = serde_json::to_vec_pretty(&compilation.module).map_err(|error| {
+                    eprintln!("[ERROR LXT-BLD-001] Failed to encode VM artifact: {error}");
+                    2
+                })?;
+                std::fs::write(&output, json).map_err(|error| {
+                    eprintln!(
+                        "[ERROR LXT-BLD-002] Failed to write {}: {error}",
+                        output.display()
+                    );
+                    2
+                })?;
+                eprintln!(
+                    "[OK] Wrote Linxts VM artifact: {} (not a native executable)",
+                    output.display()
+                );
+            }
             Ok(())
         }
         Command::Run { source, flags } => {
@@ -153,7 +175,7 @@ fn run(cli: Cli) -> Result<(), u8> {
                 emit_diagnostics(&source_file, &compilation.diagnostics, flags.fun_errors);
                 return Err(1);
             }
-            eprintln!("[Linxts] Backend: tree-walking VM (native ELF is not implemented yet)");
+            eprintln!("[Linxts] Backend: tree-walking VM (`build` emits a native executable)");
             let stdout = std::io::stdout();
             let mut output = stdout.lock();
             Vm::new(&mut output)
@@ -224,7 +246,8 @@ fn run(cli: Cli) -> Result<(), u8> {
                     println!("ai.online_authorized = false");
                     println!("cache.enabled = true (override with --no-cache)");
                     println!("backend.run = tree-walking-vm");
-                    println!("backend.build = versioned-ir-artifact");
+                    println!("backend.build.default = system-c-bootstrap");
+                    println!("backend.build.vm = versioned-ir-artifact");
                 }
             }
             Ok(())
@@ -340,7 +363,7 @@ fn doctor() {
     );
     println!("[OK] deterministic compiler: available");
     println!("[OK] VM backend: available");
-    println!("[TODO] native backend: unavailable");
+    report_command("cc", "native system C bootstrap backend");
     report_command("llama-server", "llama.cpp HTTP server");
     report_command("vulkaninfo", "Vulkan tooling");
     report_command("rocminfo", "ROCm tooling");

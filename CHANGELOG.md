@@ -15,6 +15,7 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Local llama.cpp HTTP client with health checks and 3B → 7B → larger escalation.
 - Inference timeout, retry, cancellation, size/context/token, and authorization limits.
 - Versioned, atomic, size-bounded compilation cache with IR revalidation.
+- System-C bootstrap backend producing standalone Linux executables.
 - CI configuration, documentation, examples, and tests.
 
 ### Not yet available

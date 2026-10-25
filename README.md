@@ -2,7 +2,7 @@
 
 **Linxts Adaptive Compilation System** is an experimental, AI-native adaptive multi-language compiler written in Rust. It accepts `.lx` files, detects language regions, performs traceable deterministic repairs, lowers supported syntax into a language-neutral IR, validates that IR, and executes it with a built-in VM.
 
-> Status: **v0.1.0-alpha MVP in development.** The deterministic compiler, VM, structured AI protocol, and local llama.cpp fallback router are functional for the documented subset. Native ELF generation and online providers are not implemented. `linxts build` emits a versioned `.lxb` IR/VM artifact, not an executable.
+> Status: **v0.1.0-alpha MVP in development.** The deterministic compiler, VM, structured AI protocol, local llama.cpp fallback router, validated cache, and a Linux native bootstrap backend are functional for the documented subset. `linxts build` produces a real executable through the system C compiler; direct Cranelift/LLVM code generation is not implemented. Use `--vm` to emit a versioned `.lxb` IR/VM artifact instead.
 
 ## Why Linxts
 
@@ -30,6 +30,7 @@ An online-provider tier is reserved by the router but is skipped without explici
 - Rust stable 1.85 or newer
 - Linux x86_64 is the first supported development target
 - No GPU, model, API key, Python, Node.js, or external language runtime is required for the MVP
+- A C11 compiler (`cc`) is required only for `linxts build`; the resulting executable does not need Linxts or AI at runtime
 
 ## Build and install
 
@@ -58,7 +59,8 @@ The CLI writes backend status to standard error so program output remains pipe-f
 linxts run <file.lx>       Compile and run with the Linxts VM
 linxts check <file.lx>     Parse and validate without execution
 linxts explain <file.lx>   Show detection, repairs, diagnostics, and IR
-linxts build <file.lx>     Emit a .lxb VM artifact (not native code)
+linxts build <file.lx>     Produce a native executable via system C (default)
+linxts build <file.lx> --vm  Emit a .lxb VM artifact instead
 linxts models list         Show configured AI models
 linxts models test         Health-check configured llama.cpp servers
 linxts config show         Show effective MVP settings
@@ -116,7 +118,8 @@ The current VM prints `10` and `50` for the mixed example.
 | AI timeout, retry, cancellation token, token/context budget, health check | Implemented |
 | Online model providers | Not implemented; router authorization gate exists |
 | Compilation cache | Implemented for successful validated compilations; native artifacts not cached yet |
-| Native Linux ELF backend | Planned; `build` is not native |
+| Linux x86_64 native executable | Implemented through an explicit system-C bootstrap backend |
+| Direct Cranelift/LLVM backend | Planned |
 
 Language adapters intentionally preserve distinct semantics as the project grows; syntax resemblance does not imply Python, JavaScript, and Rust are interchangeable.
 
@@ -138,6 +141,23 @@ linxts models test
 The client uses llama.cpp's native `/health` and `/completion` endpoints. CLI configuration rejects non-loopback URLs to avoid accidentally uploading source to an untrusted host. `LINXTS_AI_TIMEOUT_SECS` (1–600) and `LINXTS_AI_RETRIES` (0–5) control bounded inference. `--no-ai` prevents all model calls; `--offline` permits local endpoints but reserves the online tier as disabled.
 
 Every completion must contain a strict versioned candidate envelope. Source hash, schema version, side effects, scopes, calls, error nodes, and the entire IR are validated before the compiler replaces deterministic parse errors. Invalid JSON or IR escalates to the next configured local tier. No online provider is implemented or contacted.
+
+## Native compilation
+
+To produce and run a real Linux executable:
+
+```bash
+linxts build examples/hello.lx --output hello
+./hello
+```
+
+To emit the inspectable VM artifact instead:
+
+```bash
+linxts build examples/hello.lx --vm   # examples/hello.lxb
+```
+
+The native path lowers validated Linxts IR to generated C and invokes the configured C11 compiler (`$CC`, otherwise `cc`). The temporary C file is removed after compilation. This is deliberately reported as the **system C bootstrap backend**, not as Cranelift, LLVM, or direct ELF code generation. The resulting executable needs the platform C runtime, but not Linxts, llama.cpp, a model, Python, or Node.js.
 
 ## Compilation cache
 
