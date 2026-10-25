@@ -1,0 +1,31 @@
+name: Bug report
+description: Report reproducible incorrect compiler behavior
+title: "bug: "
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: Linxts source
+      description: Provide the smallest non-sensitive .lx example.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Actual behavior and diagnostics
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Environment
+      description: OS, architecture, rustc version, and relevant `linxts doctor` output.

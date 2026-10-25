@@ -1,0 +1,18 @@
+[package]
+name = "linxts-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "linxts"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+linxts-compiler = { path = "../linxts-compiler" }
+linxts-ir = { path = "../linxts-ir" }
+linxts-runtime = { path = "../linxts-runtime" }
+linxts-source = { path = "../linxts-source" }
+serde_json.workspace = true

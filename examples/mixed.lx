@@ -1,0 +1,8 @@
+^python
+x = 10
+
+^javascript
+console.log(x)
+
+^自然語言
+把 x 乘以 5，然後顯示結果

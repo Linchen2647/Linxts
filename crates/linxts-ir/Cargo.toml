@@ -1,0 +1,11 @@
+[package]
+name = "linxts-ir"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+linxts-source = { path = "../linxts-source" }
+serde.workspace = true
+thiserror.workspace = true

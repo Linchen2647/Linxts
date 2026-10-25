@@ -1,0 +1,20 @@
+name: Feature request
+description: Propose a compiler, language, AI, or tooling capability
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: User intent
+      description: What should a Linxts user be able to express or accomplish?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Validation and safety considerations
+      description: Explain ambiguity, side effects, compatibility, and test cases.
