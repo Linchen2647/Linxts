@@ -1,3 +1,5 @@
+mod ai_support;
+
 use clap::{Args, Parser, Subcommand};
 use linxts_compiler::{Compilation, CompileOptions, Compiler, Diagnostic, Severity};
 use linxts_runtime::Vm;
@@ -202,13 +204,9 @@ fn run(cli: Cli) -> Result<(), u8> {
         }
         Command::Models { command } => {
             match command {
-                ModelsCommand::List => {
-                    println!("No AI models configured.");
-                    println!("The deterministic compiler remains available with --no-ai.");
-                }
+                ModelsCommand::List => ai_support::list_models(),
                 ModelsCommand::Test => {
-                    println!("AI backend is not enabled in this MVP build.");
-                    return Err(1);
+                    ai_support::test_models().map_err(|()| 1)?;
                 }
             }
             Ok(())
@@ -217,7 +215,8 @@ fn run(cli: Cli) -> Result<(), u8> {
             match command {
                 ConfigCommand::Show => {
                     println!("repair.mode = aggressive");
-                    println!("ai.enabled = false (MVP)");
+                    println!("ai.local_endpoints = {}", ai_support::configured_count());
+                    println!("ai.online_authorized = false");
                     println!("backend.run = tree-walking-vm");
                     println!("backend.build = versioned-ir-artifact");
                 }
@@ -242,7 +241,8 @@ fn compile_path(path: &Path, flags: &CompileFlags) -> Result<(SourceFile, Compil
         eprintln!("[ERROR LXT-SRC-002] {error}");
         2
     })?;
-    let compilation = Compiler::compile(&source, flags.options());
+    let mut compilation = Compiler::compile(&source, flags.options());
+    ai_support::attempt_fallback(&source, &mut compilation, flags);
     Ok((source, compilation))
 }
 

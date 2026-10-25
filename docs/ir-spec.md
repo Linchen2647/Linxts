@@ -25,6 +25,10 @@ Implemented expressions:
 
 Every statement and expression carries a source span. Expressions carry a provisional type and effect; statements carry effect metadata. v0.1 inference is intentionally limited and later semantic passes will refine these fields.
 
+## JSON representation
+
+Enum nodes use adjacent tags: `{"kind":"print","data":{...expression...}}`. This avoids key collisions between a statement/expression wrapper and nested node kinds and guarantees JSON round-tripping. The AI protocol publishes recursive definitions for modules, blocks, functions, statements, expressions, literals, types, effects, and spans; typed deserialization and the validator remain authoritative.
+
 ## Validation
 
 The validator rejects:

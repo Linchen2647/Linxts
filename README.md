@@ -2,7 +2,7 @@
 
 **Linxts Adaptive Compilation System** is an experimental, AI-native adaptive multi-language compiler written in Rust. It accepts `.lx` files, detects language regions, performs traceable deterministic repairs, lowers supported syntax into a language-neutral IR, validates that IR, and executes it with a built-in VM.
 
-> Status: **v0.1.0-alpha MVP in development.** The deterministic compiler and VM are functional for the documented subset. Native ELF generation and llama.cpp integration are not implemented in this revision. `linxts build` emits a versioned `.lxb` IR/VM artifact, not an executable.
+> Status: **v0.1.0-alpha MVP in development.** The deterministic compiler, VM, structured AI protocol, and local llama.cpp fallback router are functional for the documented subset. Native ELF generation and online providers are not implemented. `linxts build` emits a versioned `.lxb` IR/VM artifact, not an executable.
 
 ## Why Linxts
 
@@ -16,14 +16,14 @@ Linxts explores a compiler model where users express intent in Python-, JavaScri
            -> Linxts IR v0.1 -> IR validator -> tree-walking VM
 ```
 
-Planned AI path:
+AI fallback path:
 
 ```text
 unresolved -> llama.cpp 3B -> 7B -> optional larger local model
-           -> explicitly authorized online provider -> IR validator
+           -> strict candidate JSON -> IR validator -> VM
 ```
 
-Normal parseable programs do not invoke a model.
+An online-provider tier is reserved by the router but is skipped without explicit authorization; no online provider is implemented yet. Normal parseable programs do not invoke a model.
 
 ## Requirements
 
@@ -60,7 +60,7 @@ linxts check <file.lx>     Parse and validate without execution
 linxts explain <file.lx>   Show detection, repairs, diagnostics, and IR
 linxts build <file.lx>     Emit a .lxb VM artifact (not native code)
 linxts models list         Show configured AI models
-linxts models test         Test model availability (not enabled yet)
+linxts models test         Health-check configured llama.cpp servers
 linxts config show         Show effective MVP settings
 linxts doctor              Inspect local prerequisites
 ```
@@ -112,7 +112,9 @@ The current VM prints `10` and `50` for the mixed example.
 | Chinese sum/even-range and simple variable arithmetic intents | Deterministic subset |
 | Python indentation semantics | Not implemented |
 | Full Python/JavaScript/Rust semantics | Not implemented |
-| llama.cpp fallback router | Planned next milestone |
+| llama.cpp structured fallback and 3B → 7B → larger-local escalation | Implemented, opt-in configuration |
+| AI timeout, retry, cancellation token, token/context budget, health check | Implemented |
+| Online model providers | Not implemented; router authorization gate exists |
 | Compilation cache | Planned |
 | Native Linux ELF backend | Planned; `build` is not native |
 
@@ -120,7 +122,22 @@ Language adapters intentionally preserve distinct semantics as the project grows
 
 ## AI configuration
 
-No model is downloaded automatically. This revision does not issue network requests or upload source code. The next milestone adds a llama.cpp HTTP provider with explicit health checks, timeout and escalation limits, versioned structured output, and mock-backed CI tests. Online providers will remain opt-in and require explicit authorization.
+No model is downloaded automatically. Start compatible llama.cpp HTTP servers yourself, then configure one or more loopback endpoints:
+
+```bash
+export LINXTS_LLAMA_3B_URL=http://127.0.0.1:8080
+export LINXTS_LLAMA_3B_MODEL=my-3b-model
+export LINXTS_LLAMA_7B_URL=http://127.0.0.1:8081
+export LINXTS_LLAMA_7B_MODEL=my-7b-model
+# Optional: LINXTS_LLAMA_LARGE_URL and LINXTS_LLAMA_LARGE_MODEL
+
+linxts models list
+linxts models test
+```
+
+The client uses llama.cpp's native `/health` and `/completion` endpoints. CLI configuration rejects non-loopback URLs to avoid accidentally uploading source to an untrusted host. `LINXTS_AI_TIMEOUT_SECS` (1–600) and `LINXTS_AI_RETRIES` (0–5) control bounded inference. `--no-ai` prevents all model calls; `--offline` permits local endpoints but reserves the online tier as disabled.
+
+Every completion must contain a strict versioned candidate envelope. Source hash, schema version, side effects, scopes, calls, error nodes, and the entire IR are validated before the compiler replaces deterministic parse errors. Invalid JSON or IR escalates to the next configured local tier. No online provider is implemented or contacted.
 
 ## Safety and privacy
 

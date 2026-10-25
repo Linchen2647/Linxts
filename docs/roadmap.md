@@ -18,11 +18,11 @@
 
 ## Phase 2 — AI compilation
 
-- [ ] typed AI candidate protocol implementation
-- [ ] llama.cpp HTTP health and completion client
-- [ ] local 3B → 7B → optional larger model escalation
-- [ ] timeout, retry, cancellation, and context/token budgets
-- [ ] mock provider and offline CI tests
+- [x] typed AI candidate protocol implementation
+- [x] llama.cpp HTTP health and completion client
+- [x] local 3B → 7B → optional larger model escalation
+- [x] timeout, retry, cancellation, and context/token budgets
+- [x] mock provider and offline CI tests
 - [ ] validated AI candidate cache
 - [ ] explicitly authorized, extensible online provider interface
 

@@ -177,10 +177,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
+name = "linxts-ai"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "linxts-ir",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "linxts-cli"
 version = "0.1.0-alpha.1"
 dependencies = [
  "clap",
+ "linxts-ai",
  "linxts-compiler",
  "linxts-ir",
  "linxts-runtime",
@@ -204,6 +215,7 @@ version = "0.1.0-alpha.1"
 dependencies = [
  "linxts-source",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 

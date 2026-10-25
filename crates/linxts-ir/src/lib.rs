@@ -68,7 +68,7 @@ impl Statement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum StatementKind {
     Variable {
         name: String,
@@ -144,7 +144,7 @@ impl Expression {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum ExpressionKind {
     Literal(Literal),
     Variable {
@@ -479,5 +479,18 @@ mod tests {
             span,
         ));
         assert!(Validator::validate(&module).is_empty());
+    }
+
+    #[test]
+    fn json_round_trip_preserves_newtype_nodes() {
+        let span = Span::empty(SourceId(0), 0);
+        let mut module = Module::new("hash");
+        module.body.statements.push(Statement::new(
+            StatementKind::Print(Expression::integer(1, span)),
+            span,
+        ));
+        let json = serde_json::to_string(&module).expect("serialize IR");
+        let decoded: Module = serde_json::from_str(&json).expect("deserialize IR");
+        assert_eq!(decoded, module);
     }
 }

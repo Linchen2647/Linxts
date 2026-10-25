@@ -5,6 +5,7 @@ members = [
     "crates/linxts-ir",
     "crates/linxts-compiler",
     "crates/linxts-runtime",
+    "crates/linxts-ai",
     "crates/linxts-cli",
 ]
 

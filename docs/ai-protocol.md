@@ -1,6 +1,6 @@
 # AI candidate protocol
 
-Status: design frozen for the next implementation milestone; no model response is consumed by the current MVP.
+Status: implemented as schema version `1` in `linxts-ai`. The llama.cpp backend supplies a recursive JSON Schema and then independently decodes and validates the typed IR.
 
 AI backends return a versioned JSON envelope. Raw source code is not an executable result.
 
@@ -24,6 +24,8 @@ AI backends return a versioned JSON envelope. Raw source code is not an executab
   }
 }
 ```
+
+The `provider` field is optional in model output and is overwritten by the trusted backend with the actual provider/model identity.
 
 ## Required checks
 
