@@ -250,6 +250,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "linxts-training"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "clap",
+ "linxts-ai",
+ "linxts-compiler",
+ "linxts-ir",
+ "linxts-runtime",
+ "linxts-source",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

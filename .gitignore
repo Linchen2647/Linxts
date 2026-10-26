@@ -6,6 +6,11 @@
 *.gguf
 *.safetensors
 /models/
+/training/data/
+/training/checkpoints/
+/training/models/
+/training/runs/
+/training/cache/
 /.cache/
 *.tmp
 *.bak
