@@ -1,0 +1,85 @@
+{
+  "status": "smoke_passed_model_not_accepted",
+  "run_id": "2026-10-26-qwen25-coder-05b-lora-smoke",
+  "git": {
+    "commit": "f8c36f1a9df4b518dd6cd52172a7a959256a6246",
+    "dirty": true
+  },
+  "dataset": {
+    "manifest_sha256": "8ab9bdb94a105b65a8208783ad794071924c413d9b6288edd66caa0e23535ca6",
+    "schema": "linxts-mini-dataset-1",
+    "ir_schema": "0.2",
+    "seed": 20261026,
+    "total_samples": 21,
+    "split_sha256": {
+      "train": "1be2cefa30f215a1510c5bc30de310a10f87559f30fb14c3d10c812ad18c8122",
+      "validation": "0d969617163907a405a01efcd2a7af3cdb937151031c618906fb67a17210e30a",
+      "test": "8c7f72ad1caa280c59e72e60245653e454bb4bc0f7174bdc498255309ea3eb8c"
+    }
+  },
+  "base_model": {
+    "id": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+    "revision": "ea3f2471cf1b1f0db85067f1ef93848e38e88c25",
+    "license": "Apache-2.0",
+    "model_safetensors_sha256": "f9523886352217ded3aeeef552b381af79d568c6d49a4b9e423288cea56b0a44"
+  },
+  "environment": {
+    "python": "3.12.13",
+    "lock_sha256": "78a8f3917693f24b239b2c8a8b647d20aa7cca8d918f50b8b11f5e3037fa8b02",
+    "gpu": "AMD Radeon RX 6800 XT",
+    "driver": "amdgpu",
+    "torch": "2.14.0+rocm7.14",
+    "torch_hip": "7.14.60850",
+    "transformers": "5.20.2",
+    "peft": "0.21.2",
+    "accelerate": "1.15.0"
+  },
+  "training": {
+    "config_sha256": "913401aa9a943dd875eb6bbdda3839e06c365aef13a652ea6c04e11cca46ecc7",
+    "seeds": [20261026],
+    "smoke_passed": true,
+    "optimizer_steps": 2,
+    "train_runtime_seconds": 5.5477,
+    "train_loss": 1.3623263239860535,
+    "validation_loss_after_step_2": 1.22,
+    "peak_vram_bytes": 2863453184,
+    "quantization": "none",
+    "resumed_from": null
+  },
+  "metrics": {
+    "linxts_no_ai_test": {
+      "language_detection_accuracy": 1.0,
+      "repair_parse_success_rate": 1.0,
+      "ir_schema_validity": 0.8,
+      "ir_validator_pass_rate": 0.8,
+      "execution_correctness": 0.8,
+      "escalation_required_rate": 0.2
+    },
+    "base_model_test": {
+      "ir_schema_validity": 0.0,
+      "ir_validator_pass_rate": 0.0,
+      "execution_correctness": 0.0,
+      "average_latency_ms": 1677.2319102019537,
+      "prompt_tokens": 443,
+      "completion_tokens": 378,
+      "escalation_required_rate": 1.0
+    },
+    "two_step_adapter_test": {
+      "ir_schema_validity": 0.0,
+      "ir_validator_pass_rate": 0.0,
+      "execution_correctness": 0.0,
+      "average_latency_ms": 20917.42241460015,
+      "prompt_tokens": 443,
+      "completion_tokens": 2767,
+      "escalation_required_rate": 1.0
+    }
+  },
+  "selected_checkpoint": null,
+  "gguf": null,
+  "notes": [
+    "The optimizer and ROCm compatibility smoke passed; this is not a quality acceptance.",
+    "All five base and smoke-adapter candidates were non-JSON strings and were rejected before IR validation.",
+    "The 21-sample seed corpus is intentionally too small for formal training.",
+    "No formal or long-running training was started, and the smoke adapter must not be routed in production."
+  ]
+}

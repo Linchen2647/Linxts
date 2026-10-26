@@ -99,7 +99,7 @@ python3 -I training/scripts/train_lora.py \
 
 The script uses local-only model loading, refuses missing models and existing output directories, fixes Python/PyTorch/data seeds, records dependency and dataset manifests, supports gradient checkpointing, and resumes from the latest recorded checkpoint only when `--resume` is given. The ordinary LoRA configuration is the default. The 4-bit configuration is experimental and must not be used until its AMD-specific smoke test passes.
 
-The current host does not have PyTorch, Transformers, PEFT, Accelerate, bitsandbytes, or ROCm tooling installed, so only environment, dataset, benchmark, and prompt-format smoke checks have passed. No real optimizer smoke test has run yet.
+The approved isolated ROCm environment and pinned Qwen2.5-Coder-0.5B model completed a real two-step LoRA optimizer smoke on the RX 6800 XT. The exact package lock and experiment record are checked in. This proves bounded pipeline compatibility only: the smoke adapter scored 0% strict schema validity on the fixed test split and is not eligible for router use or release. Formal training still requires separate approval and a much larger reviewed corpus.
 
 ## Artifact policy
 

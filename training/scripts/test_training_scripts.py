@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ast
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,15 @@ SCRIPTS = ROOT / "training" / "scripts"
 
 
 class TrainingScriptTests(unittest.TestCase):
+    def test_all_training_scripts_parse(self) -> None:
+        for path in SCRIPTS.glob("*.py"):
+            ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    def test_experiment_records_are_valid_json(self) -> None:
+        experiments = ROOT / "training" / "experiments"
+        for path in experiments.glob("*.json"):
+            json.loads(path.read_text(encoding="utf-8"))
+
     def test_environment_probe_is_read_only_and_structured(self) -> None:
         result = subprocess.run(
             [sys.executable, "-I", str(SCRIPTS / "check_environment.py")],

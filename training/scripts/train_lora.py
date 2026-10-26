@@ -8,6 +8,7 @@ import hashlib
 import importlib.metadata
 import inspect
 import json
+import math
 import random
 import sys
 import tomllib
@@ -131,6 +132,11 @@ def main() -> int:
         raise RuntimeError("accelerator unavailable and allow_cpu is false")
     if torch.cuda.is_available() and torch.version.hip is None:
         raise RuntimeError("accelerator is not a ROCm/HIP PyTorch build")
+    if torch.cuda.is_available():
+        try:
+            torch.cuda.reset_peak_memory_stats()
+        except RuntimeError:
+            pass
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_path,
@@ -192,7 +198,7 @@ def main() -> int:
         "local_files_only": True,
         "trust_remote_code": False,
         "revision": config["model"].get("revision"),
-        "torch_dtype": torch.bfloat16 if bf16 else torch.float16 if fp16 else torch.float32,
+        "dtype": torch.bfloat16 if bf16 else torch.float16 if fp16 else torch.float32,
     }
     if quantization_mode == "bnb_4bit":
         model_options["quantization_config"] = BitsAndBytesConfig(
@@ -270,6 +276,7 @@ def main() -> int:
         encoding="utf-8",
     )
 
+    argument_parameters = inspect.signature(TrainingArguments.__init__).parameters
     training_options: dict[str, Any] = {
         "output_dir": str(output),
         "seed": seed,
@@ -280,8 +287,8 @@ def main() -> int:
         "per_device_eval_batch_size": int(config["training"]["batch_size"]),
         "gradient_accumulation_steps": int(config["training"]["gradient_accumulation_steps"]),
         "learning_rate": float(config["training"]["learning_rate"]),
-        "warmup_ratio": float(config["training"]["warmup_ratio"]),
         "weight_decay": float(config["training"]["weight_decay"]),
+        "optim": "adamw_torch",
         "logging_steps": 1 if arguments.smoke_test else int(config["training"]["logging_steps"]),
         "save_steps": 1 if arguments.smoke_test else int(config["training"]["save_steps"]),
         "eval_steps": 1 if arguments.smoke_test else int(config["training"]["eval_steps"]),
@@ -293,8 +300,31 @@ def main() -> int:
         "remove_unused_columns": False,
         "save_total_limit": int(config["training"]["save_total_limit"]),
     }
-    parameter_names = inspect.signature(TrainingArguments.__init__).parameters
-    strategy_name = "eval_strategy" if "eval_strategy" in parameter_names else "evaluation_strategy"
+    warmup_ratio = float(config["training"]["warmup_ratio"])
+    if "warmup_ratio" in argument_parameters:
+        training_options["warmup_ratio"] = warmup_ratio
+    else:
+        micro_batches = math.ceil(
+            len(train_records) / int(config["training"]["batch_size"])
+        )
+        updates_per_epoch = max(
+            1,
+            math.ceil(
+                micro_batches
+                / int(config["training"]["gradient_accumulation_steps"])
+            ),
+        )
+        estimated_steps = (
+            max_steps
+            if max_steps > 0
+            else math.ceil(updates_per_epoch * float(config["training"]["epochs"]))
+        )
+        training_options["warmup_steps"] = int(estimated_steps * warmup_ratio)
+    strategy_name = (
+        "eval_strategy"
+        if "eval_strategy" in argument_parameters
+        else "evaluation_strategy"
+    )
     training_options[strategy_name] = "steps"
     training_arguments = TrainingArguments(**training_options)
 
@@ -310,12 +340,17 @@ def main() -> int:
     else:
         trainer_options["tokenizer"] = tokenizer
     trainer = Trainer(**trainer_options)
-    trainer.train(resume_from_checkpoint=checkpoint)
+    train_result = trainer.train(resume_from_checkpoint=checkpoint)
     trainer.save_model(str(output / "adapter"))
     tokenizer.save_pretrained(output / "adapter")
 
     manifest["status"] = "completed"
     manifest["completed_at_utc"] = datetime.now(timezone.utc).isoformat()
+    manifest["train_metrics"] = train_result.metrics
+    try:
+        manifest["peak_memory_bytes"] = torch.cuda.max_memory_allocated()
+    except RuntimeError:
+        manifest["peak_memory_bytes"] = None
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

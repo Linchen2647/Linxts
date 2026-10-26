@@ -68,7 +68,7 @@ def main() -> int:
         arguments.model,
         local_files_only=True,
         trust_remote_code=False,
-        torch_dtype=dtype,
+        dtype=dtype,
     )
     if arguments.adapter is not None:
         if version("peft") is None:

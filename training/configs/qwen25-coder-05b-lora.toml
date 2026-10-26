@@ -1,7 +1,7 @@
 [model]
 # Must be an existing local directory. The training script never downloads a model.
 path = "training/models/Qwen2.5-Coder-0.5B-Instruct"
-revision = "REPLACE_WITH_IMMUTABLE_UPSTREAM_COMMIT"
+revision = "ea3f2471cf1b1f0db85067f1ef93848e38e88c25"
 
 [dataset]
 path = "training/data/seed-v1"

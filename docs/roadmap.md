@@ -25,7 +25,8 @@
 - [x] local 3B → 7B → optional larger model escalation
 - [x] configurable Linxts-Mini first-tier endpoint and status checks
 - [x] compiler-validated Linxts-Mini seed dataset, split validator, and independent benchmark
-- [ ] run approved LoRA smoke training and execute base/Mini/3B/7B comparison
+- [x] approved two-step 0.5B LoRA compatibility smoke and base/smoke-adapter benchmark
+- [ ] expand the reviewed corpus and run a formally approved Mini/3B/7B comparison
 - [x] timeout, retry, cancellation, and context/token budgets
 - [x] mock provider and offline CI tests
 - [x] reproducible real-model 3B → 7B acceptance runner and evidence specification

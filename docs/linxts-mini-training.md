@@ -1,19 +1,19 @@
 # Linxts-Mini model and training assessment
 
-Assessment date: 2026-10-26. No package or model was downloaded, no system setting was changed, and no GPU training was started during this assessment.
+Assessment date: 2026-10-26. The initial inspection made no changes. After explicit approval, a user-local environment and one revision-pinned 0.5B base model were downloaded for bounded smoke testing; no system package, driver, system setting, or formal training run was started.
 
 ## Local environment
 
-Observed directly on the development host:
+Observed and tested on the development host:
 
 - AMD Radeon RX 6800 XT (`amdgpu`, Navi 21) and `/dev/kfd` are present;
-- Vulkan works, but `rocminfo`, `rocm-smi`, `hipcc`, and `amd-smi` are unavailable;
-- Python is 3.14.8;
-- PyTorch, Transformers, PEFT, Accelerate, TRL, Datasets, and bitsandbytes are not installed;
-- `uv` and Python `venv` support are available;
-- therefore the host is **not training-ready** and no real optimizer smoke test can honestly be reported as passed.
+- system `rocminfo`, `rocm-smi`, `hipcc`, and `amd-smi` remain unavailable;
+- an approved, isolated Python 3.12.13 environment under ignored `training/cache/` contains PyTorch 2.14.0+rocm7.14, HIP 7.14.60850, Transformers 5.20.2, PEFT 0.21.2, and Accelerate 1.15.0;
+- PyTorch detects one RX 6800 XT with 16 GiB, and a two-iteration tensor forward/backward/AdamW smoke test passed;
+- a two-step Qwen2.5-Coder-0.5B LoRA optimizer smoke passed in 5.55 seconds with approximately 2.86 GB peak allocated VRAM;
+- the exact package set is recorded in `training/requirements-smoke.lock`.
 
-Upstream PyTorch lists Arch Linux under its general Linux support criteria and currently accepts Python 3.10–3.14. AMD's current Radeon ROCm matrix, however, does not list the RX 6800 XT among officially supported Radeon GPUs. The presence of `/dev/kfd` is not proof that this card and framework combination is supported. Any ROCm path on this machine must be treated as an unsupported compatibility experiment until a tensor allocation, forward/backward pass, and memory test succeed.
+Upstream PyTorch lists Arch Linux under its general Linux support criteria and currently accepts Python 3.10–3.14. AMD's current Radeon ROCm matrix, however, does not list the RX 6800 XT among officially supported Radeon GPUs. The successful smoke establishes compatibility for this exact pinned wheel and bounded workload, not official AMD support or guaranteed stability for long training.
 
 ## Candidate models
 
@@ -48,7 +48,9 @@ These are conservative planning ranges, not measured results:
 | Qwen2.5-Coder 0.5B | 4–8 GiB | 3–6 GiB | 12–20 GiB | roughly 2–8 hours for 1–3 epochs |
 | Qwen2.5-Coder 1.5B | 9–15 GiB | 5–10 GiB | 25–40 GiB | roughly 6–24 hours for 1–3 epochs |
 
-Actual memory depends on sequence length, tokenizer expansion of IR JSON, precision support, activation checkpointing, optimizer, and framework kernels. Actual time on an unsupported RX 6800 XT may be much slower or may fail entirely. The formal plan must replace these ranges with measurements from the two-step smoke run before scheduling long training. CPU fallback is suitable for data and formatting tests, not for estimating full fine-tuning duration.
+The bounded 0.5B LoRA smoke measured 2.86 GB peak allocated VRAM and 5.55 seconds for two optimizer steps over the tiny seed corpus. This confirms substantial 16 GiB headroom at sequence length 1024, but it is not a throughput estimate for a production-sized corpus.
+
+Actual memory depends on sequence length, tokenizer expansion of IR JSON, precision support, activation checkpointing, optimizer, and framework kernels. Actual time on an unsupported RX 6800 XT may be much slower or may fail under sustained load. The formal plan must replace these ranges with a larger pilot measurement before scheduling long training. CPU fallback is suitable for data and formatting tests, not for estimating full fine-tuning duration.
 
 ## Reproducible pipeline
 
@@ -66,14 +68,17 @@ Actual memory depends on sequence length, tokenizer expansion of IR JSON, precis
 
 The training script calls `from_pretrained(..., local_files_only=True, trust_remote_code=False)`. It cannot silently download a model and refuses a missing local model directory. The smoke configuration uses a fixed seed, two steps, at most eight training and four validation records, cache-disabled data, and a new timestamped output directory.
 
-## Approval gate
+## Formal-training gate
 
-The next executable training step requires explicit approval for both:
+The approved environment and 0.5B model smoke steps are complete. Formal training remains blocked because:
 
-1. creating an isolated Python environment and downloading/installing a pinned ROCm PyTorch + Transformers + PEFT toolchain; and
-2. downloading one exact, revision-pinned base model—recommended first choice: Qwen2.5-Coder-0.5B-Instruct.
+- the current 21-sample corpus is deliberately a pipeline seed, not a production training set;
+- both the unmodified base model and the two-step adapter produced 0% strict candidate-schema validity on the five held-out cases;
+- the two-step adapter is an infrastructure artifact, not an acceptable Linxts-Mini release;
+- sustained-load stability on this unofficial GPU/ROCm combination has not been established;
+- QLoRA has not been tested and bitsandbytes is not installed.
 
-Until then, only dependency-free environment checks, deterministic data generation, prompt formatting, validation, and benchmarking may run. A formatting smoke test is not reported as a GPU training smoke test.
+Before any formal or long-running training, expand and review the compiler-derived corpus, run a bounded 100–500-step pilot with explicit approval, and define a stopping budget. Do not configure the smoke adapter as a router endpoint.
 
 ## Sources
 

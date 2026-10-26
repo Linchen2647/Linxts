@@ -16,7 +16,7 @@ Assessment date: 2026-10-26. This is an observed development-machine snapshot, n
 | Build prerequisites | C compiler and `pkg-config` available; `cmake` and `ninja` unavailable |
 | Host resources | 31 GiB RAM, 16 logical processors, no swap |
 
-Commands used were read-only environment checks (`command -v`, `lspci`, `vulkaninfo`, `clinfo`, `free`, `nproc`) plus `linxts doctor` and `linxts models list`. No package, driver, system setting, server, or model was installed or changed. No model was downloaded and no network inference was attempted.
+Commands used were read-only environment checks (`command -v`, `lspci`, `vulkaninfo`, `clinfo`, `free`, `nproc`) plus `linxts doctor` and `linxts models list`. No package, driver, system setting, server, or model was installed or changed during that assessment. A later, separately approved Linxts-Mini smoke installed a user-local ROCm PyTorch environment and downloaded a pinned 0.5B training checkpoint; it did not install `llama-server`, change system packages, or run formal training.
 
 ## Assessment
 
