@@ -128,7 +128,7 @@ The current VM prints `10` and `50` for the mixed example. Integration coverage 
 | Chinese sum/even-range and simple variable arithmetic intents | Deterministic subset |
 | Python indentation and `for ... in range(...)` | Implemented subset; ranges lower to validated loop IR |
 | Full Python/JavaScript/Rust/C semantics | Not implemented |
-| llama.cpp structured fallback with configurable Mini → 3B → 7B → larger-local escalation | Router implemented; Linxts-Mini weights not trained yet |
+| llama.cpp structured fallback with configurable Mini → 3B → 7B → larger-local escalation | Router implemented; experimental Mini pilot is not yet accepted for use |
 | AI timeout, retry, cancellation token, token/context budget, health check | Implemented |
 | Online model providers | Not implemented; router authorization gate exists |
 | Compilation cache | Implemented for successful validated compilations; native artifacts not cached yet |

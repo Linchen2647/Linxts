@@ -212,9 +212,31 @@ enum SeedSource {
     RepositoryFile(&'static str),
 }
 
+#[derive(Clone)]
+struct GeneratedSpec {
+    id: String,
+    split: DatasetSplit,
+    task: TrainingTask,
+    language: CandidateLanguage,
+    source: String,
+    label_source: String,
+    expected_stdout: String,
+    provenance_reference: String,
+}
+
+struct SampleDefinition<'a> {
+    id: &'a str,
+    split: DatasetSplit,
+    task: TrainingTask,
+    language: CandidateLanguage,
+    expected_stdout: &'a str,
+    provenance_path: &'a str,
+    provenance_reference: &'a str,
+}
+
 #[must_use]
 pub fn seed_count() -> usize {
-    seed_specs().len()
+    seed_specs().len() + generated_specs(DEFAULT_DATASET_SEED).len()
 }
 
 pub fn generate_dataset(
@@ -235,7 +257,40 @@ pub fn generate_dataset(
             }
         };
         let label_source = specification.label_source.unwrap_or(&source).to_owned();
-        let sample = build_sample(&specification, source, label_source)?;
+        let definition = SampleDefinition {
+            id: specification.id,
+            split: specification.split,
+            task: specification.task,
+            language: specification.language,
+            expected_stdout: specification.expected_stdout,
+            provenance_path: specification.provenance_path,
+            provenance_reference: specification.provenance_reference,
+        };
+        let sample = build_sample(&definition, source, label_source)?;
+        let duplicate_key = sample_duplicate_key(&sample)?;
+        if !duplicate_keys.insert(duplicate_key) {
+            return Err(TrainingError::InvalidSample(format!(
+                "duplicate generated sample {}",
+                sample.id
+            )));
+        }
+        samples.push(sample);
+    }
+    for specification in generated_specs(seed) {
+        let definition = SampleDefinition {
+            id: &specification.id,
+            split: specification.split,
+            task: specification.task,
+            language: specification.language,
+            expected_stdout: &specification.expected_stdout,
+            provenance_path: "crates/linxts-training/src/lib.rs",
+            provenance_reference: &specification.provenance_reference,
+        };
+        let sample = build_sample(
+            &definition,
+            specification.source,
+            specification.label_source,
+        )?;
         let duplicate_key = sample_duplicate_key(&sample)?;
         if !duplicate_keys.insert(duplicate_key) {
             return Err(TrainingError::InvalidSample(format!(
@@ -532,7 +587,7 @@ pub fn benchmark_predictions_split(
 }
 
 fn build_sample(
-    specification: &SeedSpec,
+    specification: &SampleDefinition<'_>,
     source: String,
     label_source: String,
 ) -> Result<TrainingSample, TrainingError> {
@@ -937,6 +992,140 @@ fn ratio(numerator: usize, denominator: usize) -> f64 {
         0.0
     } else {
         numerator as f64 / denominator as f64
+    }
+}
+
+fn generated_specs(seed: u64) -> Vec<GeneratedSpec> {
+    use CandidateLanguage as L;
+    use TrainingTask as T;
+
+    let mut specifications = Vec::new();
+    let mut add = |family: &str,
+                   value: i64,
+                   task: TrainingTask,
+                   language: CandidateLanguage,
+                   source: String,
+                   expected_stdout: String| {
+        let id = format!("generated-{family}-{value}");
+        specifications.push(GeneratedSpec {
+            split: generated_split(&id, seed),
+            provenance_reference: format!(
+                "parameterized {family} family generated with fixed seed {seed}"
+            ),
+            label_source: source.clone(),
+            id,
+            task,
+            language,
+            source,
+            expected_stdout,
+        });
+    };
+
+    for value in 100_i64..200 {
+        add(
+            "generic-print",
+            value,
+            T::LanguageDetection,
+            L::Generic,
+            format!("PRINT {value}\n"),
+            format!("{value}\n"),
+        );
+        add(
+            "python-format",
+            value,
+            T::StructuredIrGeneration,
+            L::Python,
+            format!("^python\nx = {value}\nprint(f\"值={{x}}\")\n"),
+            format!("值={value}\n"),
+        );
+        add(
+            "javascript-template",
+            value,
+            T::StructuredIrGeneration,
+            L::Javascript,
+            format!("^javascript\nlet x = {value}; console.log(`值=${{x}}`);\n"),
+            format!("值={value}\n"),
+        );
+        add(
+            "rust-format",
+            value,
+            T::StructuredIrGeneration,
+            L::Rust,
+            format!("^rust\nlet x = {value}; println!(\"值={{}}\", x);\n"),
+            format!("值={value}\n"),
+        );
+        add(
+            "c-format",
+            value,
+            T::StructuredIrGeneration,
+            L::C,
+            format!("^c\nint x = {value}; printf(\"值=%d\", x);\n"),
+            format!("值={value}\n"),
+        );
+        add(
+            "javascript-repair",
+            value,
+            T::SyntaxRepair,
+            L::Javascript,
+            format!("^javascript\nconsole.log(\"repair-{value}\"\n"),
+            format!("repair-{value}\n"),
+        );
+        add(
+            "python-repair",
+            value,
+            T::SyntaxRepair,
+            L::Python,
+            format!("^python\nprint(\"修復{value}\n"),
+            format!("修復{value}\n"),
+        );
+        add(
+            "invalid-ir",
+            value,
+            T::InvalidIrCorrection,
+            L::Generic,
+            format!("x = {value}\nprint(x + 1)\n"),
+            format!("{}\n", value + 1),
+        );
+        let sum = value * (value + 1) / 2;
+        add(
+            "natural-sum",
+            value,
+            T::NaturalLanguageToIr,
+            L::Natural,
+            format!("^自然語言\n請計算1到{value}的總和\n"),
+            format!("{sum}\n"),
+        );
+        add(
+            "python-range",
+            value,
+            T::StructuredIrGeneration,
+            L::Python,
+            format!(
+                "^python\ntotal = 0\nfor i in range(1, {}):\n    total = total + i\nprint(total)\n",
+                value + 1
+            ),
+            format!("{sum}\n"),
+        );
+        add(
+            "mixed-shared",
+            value,
+            T::MixedLanguageUnderstanding,
+            L::Mixed,
+            format!(
+                "^python\nx = {value}\n^javascript\nconsole.log(x)\n^自然語言\n把 x 乘以 2，然後顯示結果\n"
+            ),
+            format!("{value}\n{}\n", value * 2),
+        );
+    }
+    specifications
+}
+
+fn generated_split(group_id: &str, seed: u64) -> DatasetSplit {
+    let digest = Sha256::digest(format!("{seed}:{group_id}").as_bytes());
+    if digest[0] < 26 {
+        DatasetSplit::Validation
+    } else {
+        DatasetSplit::Train
     }
 }
 

@@ -15,6 +15,7 @@ def format_record(record: dict[str, Any]) -> tuple[str, str]:
     model_input = {
         "task": record["task"],
         "source": record["input"]["source"],
+        "source_hash": record["verification"]["source_hash"],
         "diagnostics": record["input"]["diagnostics"],
     }
     if "invalid_ir" in record["input"]:

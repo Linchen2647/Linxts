@@ -64,7 +64,10 @@ class TrainingScriptTests(unittest.TestCase):
                 "task": "structured_ir_generation",
                 "input": {"source": "PRINT 1\n", "diagnostics": []},
                 "target": {"schema_version": "1", "status": "candidate"},
-                "verification": {"label_source": "must not enter prompt"},
+                "verification": {
+                    "label_source": "must not enter prompt",
+                    "source_hash": "test-source-hash",
+                },
             }
             encoded = json.dumps(record, ensure_ascii=False) + "\n"
             (dataset / "train.jsonl").write_text(encoded, encoding="utf-8")

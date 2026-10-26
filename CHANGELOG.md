@@ -20,6 +20,7 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Local llama.cpp HTTP client with health checks and configurable Linxts-Mini → 3B → 7B → larger escalation.
 - Compiler-validated Linxts-Mini dataset generation, leakage-safe splits, independent benchmark, local-only LoRA runner, and experiment records.
 - A pinned Qwen2.5-Coder-0.5B two-step LoRA smoke on ROCm/RX 6800 XT, recorded as pipeline compatibility rather than model-quality acceptance.
+- A compiler-validated 1,121-sample pilot corpus and authorized 100-step LoRA run, improving held-out schema/validator validity to 40% and execution correctness to 20% without promoting the checkpoint.
 - Inference timeout, retry, cancellation, size/context/token, and authorization limits.
 - Per-attempt AI route diagnostics plus a hash-pinned, repeatable real 3B → 7B acceptance runner kept separate from mock CI coverage.
 - Versioned, atomic, size-bounded compilation cache with IR revalidation.

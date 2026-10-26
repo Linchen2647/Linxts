@@ -1,6 +1,6 @@
 use linxts_training::{
     BenchmarkReport, DEFAULT_DATASET_SEED, DatasetSplit, PredictionRecord, TrainingSample,
-    benchmark_no_ai, benchmark_predictions, generate_dataset, validate_dataset,
+    benchmark_no_ai, benchmark_predictions, generate_dataset, seed_count, validate_dataset,
 };
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -49,7 +49,7 @@ fn generated_dataset_is_reproducible_and_valid() {
 
     let report = validate_dataset(&first).expect("validate dataset");
     assert!(report.passed(), "{report:?}");
-    assert_eq!(report.total_samples, 21);
+    assert_eq!(report.total_samples, seed_count());
     for file in [
         "train.jsonl",
         "validation.jsonl",
@@ -104,7 +104,7 @@ fn benchmark_compares_no_ai_and_prediction_outputs() {
     let directory = generate("benchmark");
     let baseline = benchmark_no_ai(&directory).expect("no-AI benchmark");
     assert_eq!(baseline.system, "linxts-no-ai");
-    assert_eq!(baseline.total_samples, 21);
+    assert_eq!(baseline.total_samples, seed_count());
     assert!(baseline.execution_correctness < 1.0);
     assert!(baseline.escalation_required_rate > 0.0);
 
@@ -132,7 +132,7 @@ fn benchmark_compares_no_ai_and_prediction_outputs() {
     assert_eq!(model.execution_correctness, 1.0);
     assert_eq!(model.escalation_required_rate, 0.0);
     assert_eq!(model.average_latency_ms, Some(10.0));
-    assert_eq!(model.prompt_tokens, Some(2_100));
-    assert_eq!(model.completion_tokens, Some(4_200));
+    assert_eq!(model.prompt_tokens, Some(seed_count() as u64 * 100));
+    assert_eq!(model.completion_tokens, Some(seed_count() as u64 * 200));
     let _ = std::fs::remove_dir_all(directory);
 }

@@ -1,0 +1,95 @@
+{
+  "status": "pilot_completed_model_not_accepted",
+  "run_id": "2026-10-26-qwen25-coder-05b-lora-pilot-v2",
+  "git": {
+    "commit": "0d4ebec54bfc5d21c45e226cb91cf2c0e71370b2",
+    "dirty": true
+  },
+  "dataset": {
+    "manifest_sha256": "785c1c4852b5d541e4bf1633a44b6bfabc98b7657432bc15b9b56fc47c94ed2b",
+    "schema": "linxts-mini-dataset-1",
+    "ir_schema": "0.2",
+    "seed": 20261026,
+    "total_samples": 1121,
+    "split_sha256": {
+      "train": "057b88c3986985b2a04073bcecf463f9ae556d13a8b4ea51ef9d707ec11b55ed",
+      "validation": "925d066977e88a0c73db6d68e163e3183fc5d8293f014479547c699d886e6b08",
+      "test": "8c7f72ad1caa280c59e72e60245653e454bb4bc0f7174bdc498255309ea3eb8c"
+    }
+  },
+  "base_model": {
+    "id": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+    "revision": "ea3f2471cf1b1f0db85067f1ef93848e38e88c25",
+    "license": "Apache-2.0",
+    "model_safetensors_sha256": "f9523886352217ded3aeeef552b381af79d568c6d49a4b9e423288cea56b0a44"
+  },
+  "environment": {
+    "python": "3.12.13",
+    "lock_sha256": "78a8f3917693f24b239b2c8a8b647d20aa7cca8d918f50b8b11f5e3037fa8b02",
+    "gpu": "AMD Radeon RX 6800 XT",
+    "driver": "amdgpu",
+    "torch": "2.14.0+rocm7.14",
+    "torch_hip": "7.14.60850",
+    "transformers": "5.20.2",
+    "peft": "0.21.2",
+    "accelerate": "1.15.0"
+  },
+  "training": {
+    "config_sha256": "af349def61f38c700f9f302653548d6cb117664e94ef81b918d4692285b87c4d",
+    "seeds": [20261026],
+    "optimizer_steps": 100,
+    "effective_epochs": 1.5949748743718593,
+    "train_runtime_seconds": 432.1812,
+    "train_loss": 0.10860355437733232,
+    "peak_vram_bytes": 3026496512,
+    "quantization": "none",
+    "resumed_from": null
+  },
+  "metrics": {
+    "linxts_no_ai_test": {
+      "language_detection_accuracy": 1.0,
+      "repair_parse_success_rate": 1.0,
+      "ir_schema_validity": 0.8,
+      "ir_validator_pass_rate": 0.8,
+      "execution_correctness": 0.8,
+      "escalation_required_rate": 0.2
+    },
+    "base_model_test": {
+      "ir_schema_validity": 0.0,
+      "ir_validator_pass_rate": 0.0,
+      "execution_correctness": 0.0,
+      "escalation_required_rate": 1.0
+    },
+    "pilot_v1_without_source_hash_prompt": {
+      "ir_schema_validity": 0.2,
+      "ir_validator_pass_rate": 0.0,
+      "execution_correctness": 0.0,
+      "escalation_required_rate": 1.0
+    },
+    "pilot_v2_test": {
+      "language_detection_accuracy": 0.4,
+      "repair_parse_success_rate": 1.0,
+      "ir_schema_validity": 0.4,
+      "ir_validator_pass_rate": 0.4,
+      "execution_correctness": 0.2,
+      "average_latency_ms": 14088.5043212038,
+      "prompt_tokens": 749,
+      "completion_tokens": 1893,
+      "escalation_required_rate": 0.8
+    },
+    "fallback_only_holdout": {
+      "samples": 1,
+      "ir_schema_validity": 0.0,
+      "execution_correctness": 0.0,
+      "note": "The factorial fallback candidate remained non-JSON."
+    }
+  },
+  "selected_checkpoint": null,
+  "gguf": null,
+  "notes": [
+    "The prompt was corrected to expose the trusted source_hash so the model can copy it into IR.",
+    "The pilot learned strict candidates for two of five holdouts and executed one repair case correctly.",
+    "It did not solve the only deterministic-fallback holdout and remains below router acceptance thresholds.",
+    "No GGUF conversion or router deployment is permitted for this checkpoint."
+  ]
+}

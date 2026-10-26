@@ -9,16 +9,16 @@ Generate a deterministic seed corpus into an ignored directory:
 ```bash
 cargo run -p linxts-training --offline -- generate \
   --repository-root . \
-  --output training/data/seed-v1 \
+  --output training/data/pilot-v1 \
   --seed 20261026
 
 cargo run -p linxts-training --offline -- validate \
-  --dataset training/data/seed-v1
+  --dataset training/data/pilot-v1
 ```
 
 The generator derives cases from checked-in examples, compiler/parser/repair tests, the AI candidate protocol, and fixed holdouts. Every target is produced from source accepted by the deterministic compiler, normalized to the active input snapshot, passed through `CandidateEnvelope::validate` and the IR validator, executed in the VM, and compared with explicit expected stdout. Unsupported natural-language inputs use a checked-in deterministic code oracle; unverified AI output is never used as a label.
 
-The initial corpus is intentionally small and serves pipeline development and smoke testing. It is not large enough to claim useful fine-tuning.
+The generator provides two practical scales: the original 21-case conceptual seed and a deterministic 1,121-sample pilot corpus (995 train, 121 validation, five unchanged fixed tests). Parameterized samples cover formatting, repairs, invalid IR, natural-language sums, Python ranges, and mixed-language state while preserving group-level split isolation. The pilot corpus is sufficient for bounded optimization experiments, but still too narrow to claim general compiler coverage.
 
 ## Record format
 
@@ -41,7 +41,7 @@ The no-AI deterministic baseline runs directly from the frozen **test split** by
 
 ```bash
 cargo run -p linxts-training --offline -- benchmark \
-  --dataset training/data/seed-v1
+  --dataset training/data/pilot-v1
 ```
 
 Use `--split all` only for development diagnostics; model selection must use the untouched test split.
@@ -51,7 +51,7 @@ After approval has placed a base model locally, generate prediction JSONL withou
 ```bash
 python3 -I training/scripts/evaluate_model.py \
   --model training/models/<local-base-model> \
-  --dataset training/data/seed-v1 \
+  --dataset training/data/pilot-v1 \
   --split test \
   --output training/runs/<run>/predictions.jsonl
 ```
@@ -66,7 +66,7 @@ Evaluate a base model, Linxts-Mini, 3B, or 7B prediction file independently:
 
 ```bash
 cargo run -p linxts-training --offline -- benchmark \
-  --dataset training/data/seed-v1 \
+  --dataset training/data/pilot-v1 \
   --predictions training/runs/<run>/predictions.jsonl \
   --system linxts-mini
 ```
@@ -85,7 +85,7 @@ Prompt formatting can be tested without PyTorch or a model:
 
 ```bash
 python3 -I training/scripts/train_lora.py \
-  --config training/configs/qwen25-coder-05b-lora.toml \
+  --config training/configs/qwen25-coder-05b-pilot.toml \
   --format-smoke
 ```
 
@@ -93,13 +93,15 @@ After explicit approval has supplied an isolated, pinned training environment an
 
 ```bash
 python3 -I training/scripts/train_lora.py \
-  --config training/configs/qwen25-coder-05b-lora.toml \
+  --config training/configs/qwen25-coder-05b-pilot.toml \
   --smoke-test
 ```
 
 The script uses local-only model loading, refuses missing models and existing output directories, fixes Python/PyTorch/data seeds, records dependency and dataset manifests, supports gradient checkpointing, and resumes from the latest recorded checkpoint only when `--resume` is given. The ordinary LoRA configuration is the default. The 4-bit configuration is experimental and must not be used until its AMD-specific smoke test passes.
 
-The approved isolated ROCm environment and pinned Qwen2.5-Coder-0.5B model completed a real two-step LoRA optimizer smoke on the RX 6800 XT. The exact package lock and experiment record are checked in. This proves bounded pipeline compatibility only: the smoke adapter scored 0% strict schema validity on the fixed test split and is not eligible for router use or release. Formal training still requires separate approval and a much larger reviewed corpus.
+The approved isolated ROCm environment and pinned Qwen2.5-Coder-0.5B model completed a real two-step LoRA optimizer smoke on the RX 6800 XT. The exact package lock and experiment record are checked in. This proves bounded pipeline compatibility only: the smoke adapter scored 0% strict schema validity on the fixed test split and is not eligible for router use or release.
+
+A subsequent authorized 100-step pilot trained on 995 generated examples after correcting the prompt to include the trusted source hash. It reached 40% strict schema validity, 40% IR-validator pass rate, and 20% execution correctness on the five fixed holdouts. The only deterministic-fallback holdout remained unsolved, so the pilot checkpoint is recorded but is still not eligible for router use, GGUF release, or a Linxts-Mini capability claim.
 
 ## Artifact policy
 
