@@ -9,6 +9,9 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Initial Rust workspace and Git-managed compiler MVP.
 - UTF-8 source manager with snapshots and Unicode source positions.
 - Language hints, deterministic detection, tolerant parser, and bounded repair engine.
+- Basic C hint/detection/parser adapter with `int main`, declarations, `printf`, and return.
+- Inline known language hints without silently discarding trailing source.
+- Unterminated-string repair reuses existing structural closers to avoid cascading over-repair.
 - Linxts Unified IR v0.1, validator, tree-walking VM, and CLI.
 - Mixed-language top-level variables and a deterministic Chinese intent subset.
 - Versioned AI candidate protocol, recursive IR JSON Schema, and safety validation.

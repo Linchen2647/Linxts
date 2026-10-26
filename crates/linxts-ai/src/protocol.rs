@@ -21,6 +21,7 @@ pub enum CandidateLanguage {
     Python,
     Javascript,
     Rust,
+    C,
     Natural,
     Generic,
     Mixed,
@@ -180,7 +181,7 @@ pub fn candidate_json_schema() -> serde_json::Value {
             "schema_version": {"const": AI_SCHEMA_VERSION},
             "status": {"const": "candidate"},
             "language": {
-                "enum": ["python", "javascript", "rust", "natural", "generic", "mixed"]
+                "enum": ["python", "javascript", "rust", "c", "natural", "generic", "mixed"]
             },
             "interpretation": {"type": "string", "minLength": 1, "maxLength": 4096},
             "ir": {"$ref": "#/$defs/module"},

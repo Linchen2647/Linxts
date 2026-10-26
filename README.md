@@ -6,7 +6,7 @@
 
 ## Why Linxts
 
-Linxts explores a compiler model where users express intent in Python-, JavaScript-, Rust-, generic-, or natural-language fragments while the compiler owns detection, conservative repair, semantic validation, and execution. AI is a fallback, never the trust boundary: model output must become validated Linxts IR before it can run.
+Linxts explores a compiler model where users express intent in Python-, JavaScript-, Rust-, C-, generic-, or natural-language fragments while the compiler owns detection, conservative repair, semantic validation, and execution. AI is a fallback, never the trust boundary: model output must become validated Linxts IR before it can run.
 
 ## Current architecture
 
@@ -84,6 +84,18 @@ Hinted JavaScript with a repairable delimiter:
 console.log("Hello"
 ```
 
+C subset with a descriptive hint:
+
+```text
+^C語言
+int main() {
+    printf("Hello from C");
+    return 0;
+}
+```
+
+Known short hints may also share a line with their first statement, for example `^python print("Hello")`.
+
 Mixed input with a shared variable:
 
 ```text
@@ -104,16 +116,17 @@ The current VM prints `10` and `50` for the mixed example.
 | Capability | Status |
 | --- | --- |
 | Unicode source, spans, line/column diagnostics | Implemented |
-| `^python`, `^py`, `^javascript`, `^js`, `^rust`, descriptive and natural-language hints | Implemented |
+| `^python`, `^py`, `^javascript`, `^js`, `^rust`, `^c`, `^C語言`, descriptive and natural-language hints | Implemented |
 | Marker-free deterministic language detection | Implemented, heuristic scoring |
 | Integers, strings, booleans, variables, assignment, arithmetic, comparison | Implemented |
-| `print`, `Print`, `console.log`, `println!` | Implemented |
+| `print`, `Print`, `console.log`, `println!`, single-value `printf` | Implemented |
+| C `int`/`void` functions, integer declarations, `printf`, and return | Implemented subset |
 | Brace-delimited `if` and `while` | Implemented subset |
 | Functions, calls, parameters, return | Implemented subset |
 | Missing quote/parenthesis/brace repair and selected typo repair | Implemented |
 | Chinese sum/even-range and simple variable arithmetic intents | Deterministic subset |
 | Python indentation semantics | Not implemented |
-| Full Python/JavaScript/Rust semantics | Not implemented |
+| Full Python/JavaScript/Rust/C semantics | Not implemented |
 | llama.cpp structured fallback and 3B → 7B → larger-local escalation | Implemented, opt-in configuration |
 | AI timeout, retry, cancellation token, token/context budget, health check | Implemented |
 | Online model providers | Not implemented; router authorization gate exists |

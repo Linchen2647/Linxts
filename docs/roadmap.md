@@ -13,7 +13,8 @@
 - [x] CLI commands and diagnostics
 - [x] representative unit and integration tests
 - [x] GitHub Actions configuration
-- [ ] broader Python indentation and JavaScript/Rust subset coverage
+- [x] basic C adapter (`int main`, integer declarations, `printf`, return)
+- [ ] broader Python indentation and JavaScript/Rust/C subset coverage
 - [x] compilation cache for successful validated compilations
 
 ## Phase 2 — AI compilation

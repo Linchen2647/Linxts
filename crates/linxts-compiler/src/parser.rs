@@ -101,6 +101,13 @@ impl<'a> Parser<'a> {
             self.synchronize();
             return None;
         }
+        if self.is_c_function_start() {
+            self.parse_c_function();
+            return None;
+        }
+        if self.is_c_declaration_start() {
+            return Some(self.parse_c_declaration());
+        }
         if self.check_identifier("fn")
             || self.check_identifier("def")
             || self.check_identifier("function")
@@ -204,6 +211,99 @@ impl<'a> Parser<'a> {
             return_type: Type::Unknown,
             span: merge(start, end),
         });
+    }
+
+    fn parse_c_function(&mut self) {
+        let return_token = self.advance().clone();
+        let return_type = match &return_token.kind {
+            TokenKind::Identifier(name) if name.eq_ignore_ascii_case("void") => Type::Unit,
+            _ => Type::Integer,
+        };
+        let Some((name, name_span)) = self.take_identifier() else {
+            self.error_here("LXT-107", "expected C function name");
+            self.synchronize();
+            return;
+        };
+        if !self.consume(&TokenKind::LeftParen) {
+            self.error_here("LXT-108", "expected `(` after C function name");
+        }
+        let mut parameters = Vec::new();
+        if self.check_identifier("void") {
+            self.advance();
+        } else {
+            while !self.at(&TokenKind::RightParen) && !self.at(&TokenKind::Eof) {
+                if self.check_identifier("int") || self.check_identifier("char") {
+                    self.advance();
+                    self.consume(&TokenKind::Star);
+                }
+                let Some((parameter, span)) = self.take_identifier() else {
+                    self.error_here("LXT-109", "expected C parameter name");
+                    self.advance();
+                    continue;
+                };
+                parameters.push(Parameter {
+                    name: parameter,
+                    ty: Type::Unknown,
+                    span,
+                });
+                if !self.consume(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        if !self.consume(&TokenKind::RightParen) {
+            self.error_here("LXT-110", "expected `)` after C parameters");
+        }
+
+        let globals = self.declared.clone();
+        for parameter in &parameters {
+            self.declared.insert(parameter.name.clone());
+        }
+        let body = self.parse_required_block();
+        *self.declared = globals;
+        let end = body
+            .statements
+            .last()
+            .map_or(name_span, |statement| statement.span);
+        self.functions.push(Function {
+            name,
+            parameters,
+            body,
+            return_type,
+            span: merge(return_token.span, end),
+        });
+    }
+
+    fn parse_c_declaration(&mut self) -> Statement {
+        let start = self.advance().span;
+        self.consume(&TokenKind::Star);
+        let Some((name, name_span)) = self.take_identifier() else {
+            self.error_here("LXT-111", "expected C variable name");
+            return Statement::new(
+                StatementKind::Expression(Expression::new(
+                    ExpressionKind::Error {
+                        message: "missing C variable name".to_owned(),
+                    },
+                    start,
+                )),
+                start,
+            );
+        };
+        let value = if self.consume(&TokenKind::Equal) {
+            self.parse_expression(0)
+        } else {
+            Expression::integer(0, name_span)
+        };
+        self.declared.insert(name.clone());
+        let span = merge(start, value.span);
+        Statement::new(
+            StatementKind::Variable {
+                name,
+                value,
+                mutable: true,
+            },
+            span,
+        )
     }
 
     fn parse_conditional(&mut self) -> Statement {
@@ -509,11 +609,34 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn is_c_function_start(&self) -> bool {
+        (self.check_identifier("int") || self.check_identifier("void"))
+            && matches!(
+                self.tokens.get(self.cursor + 1).map(|token| &token.kind),
+                Some(TokenKind::Identifier(_))
+            )
+            && matches!(
+                self.tokens.get(self.cursor + 2).map(|token| &token.kind),
+                Some(TokenKind::LeftParen)
+            )
+    }
+
+    fn is_c_declaration_start(&self) -> bool {
+        if !(self.check_identifier("int") || self.check_identifier("char")) {
+            return false;
+        }
+        matches!(
+            self.tokens.get(self.cursor + 1).map(|token| &token.kind),
+            Some(TokenKind::Identifier(_)) | Some(TokenKind::Star)
+        )
+    }
+
     fn is_print_start(&self) -> bool {
         match &self.current().kind {
             TokenKind::Identifier(name) => {
                 name.eq_ignore_ascii_case("print")
                     || name.eq_ignore_ascii_case("println")
+                    || name.eq_ignore_ascii_case("printf")
                     || (name.eq_ignore_ascii_case("console")
                         && matches!(
                             self.tokens.get(self.cursor + 1).map(|token| &token.kind),
@@ -635,6 +758,18 @@ mod tests {
         assert!(unit.is_complete(), "{:?}", unit.diagnostics);
         assert!(matches!(
             unit.block.statements[0].kind,
+            StatementKind::Print(_)
+        ));
+    }
+
+    #[test]
+    fn parses_c_main_and_printf() {
+        let unit = parse("int main() { printf(\"Hello\"); return 0; }");
+        assert!(unit.is_complete(), "{:?}", unit.diagnostics);
+        assert_eq!(unit.functions.len(), 1);
+        assert_eq!(unit.functions[0].name, "main");
+        assert!(matches!(
+            unit.functions[0].body.statements[0].kind,
             StatementKind::Print(_)
         ));
     }

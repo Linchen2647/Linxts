@@ -1,0 +1,5 @@
+^C語言
+int main() {
+    printf("Hello from C");
+    return 0;
+}

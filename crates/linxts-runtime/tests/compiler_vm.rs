@@ -28,6 +28,10 @@ fn language_hints_and_repair_have_expected_output() {
         execute("^rust\nfn main() {\n  println!(\"Hello\")\n"),
         "Hello\n"
     );
+    assert_eq!(
+        execute("^C語言\nint main() {\n  printf(\"Hello from C\");\n  return 0;\n"),
+        "Hello from C\n"
+    );
 }
 
 #[test]

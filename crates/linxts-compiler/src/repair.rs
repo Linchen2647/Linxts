@@ -133,9 +133,11 @@ fn repair_delimiters(
     let mut stack = Vec::new();
     let mut single_quote = false;
     let mut double_quote = false;
+    let mut single_quote_start = None;
+    let mut double_quote_start = None;
     let mut escaped = false;
 
-    for character in text.chars() {
+    for (index, character) in text.char_indices() {
         if escaped {
             escaped = false;
             continue;
@@ -145,8 +147,14 @@ fn repair_delimiters(
             continue;
         }
         match character {
-            '\'' if !double_quote => single_quote = !single_quote,
-            '"' if !single_quote => double_quote = !double_quote,
+            '\'' if !double_quote => {
+                single_quote = !single_quote;
+                single_quote_start = single_quote.then_some(index);
+            }
+            '"' if !single_quote => {
+                double_quote = !double_quote;
+                double_quote_start = double_quote.then_some(index);
+            }
             '(' | '[' | '{' if !single_quote && !double_quote => stack.push(character),
             ')' | ']' | '}'
                 if !single_quote
@@ -165,8 +173,24 @@ fn repair_delimiters(
         if options.strict {
             return;
         }
-        let quote = if single_quote { "'" } else { "\"" };
-        let insertion = trailing_content_end(text);
+        let (quote, quote_start) = if single_quote {
+            ("'", single_quote_start.expect("open quote has a start"))
+        } else {
+            ("\"", double_quote_start.expect("open quote has a start"))
+        };
+        let insertion = stack.last().map_or_else(
+            || trailing_content_end(text),
+            |opening| {
+                let expected = matching(*opening);
+                let search_start = quote_start + quote.len();
+                text[search_start..]
+                    .char_indices()
+                    .find_map(|(relative, character)| {
+                        (character == expected).then_some(search_start + relative)
+                    })
+                    .unwrap_or_else(|| trailing_content_end(text))
+            },
+        );
         text.insert_str(insertion, quote);
         push_record(
             records,
@@ -177,6 +201,7 @@ fn repair_delimiters(
             "closed an unterminated string literal",
             SemanticRisk::Medium,
         );
+        return;
     }
 
     if stack.is_empty() {
@@ -260,6 +285,19 @@ mod tests {
         assert_eq!(result.text, "console.log(\"Hello\")");
         assert_eq!(result.records.len(), 1);
         assert_eq!(result.records[0].semantic_risk, SemanticRisk::Low);
+    }
+
+    #[test]
+    fn quote_repair_reuses_existing_structural_closers() {
+        let result = RepairEngine::repair(
+            SourceId(0),
+            0,
+            "fn main() {\nprint!(1\",{})\n}\n",
+            RepairOptions::default(),
+        );
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].repaired_text, "\"");
+        assert!(result.text.contains("1\",{}\")"));
     }
 
     #[test]
