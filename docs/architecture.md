@@ -19,7 +19,7 @@ Linxts is split into a small number of working crates rather than one crate per 
 5. In aggressive mode, deterministic repair runs for at most four passes and parsing is retried.
 6. Natural-language phrases covered by deterministic rules lower directly to IR.
 7. The deterministic IR validator rejects schema mismatches, unresolved error nodes, scope errors, bad calls, and excessive nesting.
-8. If only parser/validation errors remain and AI is enabled, configured local llama.cpp tiers are tried in 3B → 7B → larger order. The router bounds health checks, retries, time, prompt/response size, context, output, cancellation, and escalation.
+8. If only parser/validation errors remain and AI is enabled, configured local llama.cpp tiers are tried in Linxts-Mini → 3B → 7B → larger order. Linxts-Mini is a configurable router tier; no trained Mini weights are shipped yet. The router bounds health checks, retries, time, prompt/response size, context, output, cancellation, and escalation.
 9. Candidate JSON is decoded with unknown fields denied, bound to the active source hash, restricted to pure/output effects, and passed through the IR validator again.
 10. Successful compilations are atomically cached under a versioned content key; every hit is size/version/source checked and its IR is revalidated.
 11. `run` executes valid IR in the VM. Default `build` lowers IR to generated C and invokes the system C11 compiler; `build --vm` serializes `.lxb`.

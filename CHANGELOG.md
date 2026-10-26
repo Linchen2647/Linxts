@@ -17,7 +17,8 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Mixed-language top-level variables and a deterministic Chinese intent subset.
 - VM and native integration coverage combining shared variables, cross-language function calls, loops, and formatting.
 - Versioned AI candidate protocol, recursive IR JSON Schema, and safety validation.
-- Local llama.cpp HTTP client with health checks and 3B → 7B → larger escalation.
+- Local llama.cpp HTTP client with health checks and configurable Linxts-Mini → 3B → 7B → larger escalation.
+- Compiler-validated Linxts-Mini dataset generation, leakage-safe splits, independent benchmark, local-only LoRA runner, and experiment records.
 - Inference timeout, retry, cancellation, size/context/token, and authorization limits.
 - Per-attempt AI route diagnostics plus a hash-pinned, repeatable real 3B → 7B acceptance runner kept separate from mock CI coverage.
 - Versioned, atomic, size-bounded compilation cache with IR revalidation.

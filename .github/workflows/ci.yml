@@ -31,5 +31,7 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         run: cargo test --workspace --locked
+      - name: Test training scripts without model dependencies
+        run: python3 -I training/scripts/test_training_scripts.py
       - name: Build
         run: cargo build --workspace --locked

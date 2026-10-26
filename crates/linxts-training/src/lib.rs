@@ -385,7 +385,14 @@ pub fn validate_dataset(directory: &Path) -> Result<ValidationReport, TrainingEr
 }
 
 pub fn benchmark_no_ai(directory: &Path) -> Result<BenchmarkReport, TrainingError> {
-    let samples = load_samples(directory)?;
+    benchmark_no_ai_split(directory, None)
+}
+
+pub fn benchmark_no_ai_split(
+    directory: &Path,
+    split: Option<DatasetSplit>,
+) -> Result<BenchmarkReport, TrainingError> {
+    let samples = load_samples(directory, split)?;
     let mut metrics = Metrics::default();
     let mut elapsed = Duration::ZERO;
     for sample in &samples {
@@ -444,7 +451,16 @@ pub fn benchmark_predictions(
     predictions_path: &Path,
     system: &str,
 ) -> Result<BenchmarkReport, TrainingError> {
-    let samples = load_samples(directory)?;
+    benchmark_predictions_split(directory, predictions_path, system, None)
+}
+
+pub fn benchmark_predictions_split(
+    directory: &Path,
+    predictions_path: &Path,
+    system: &str,
+    split: Option<DatasetSplit>,
+) -> Result<BenchmarkReport, TrainingError> {
+    let samples = load_samples(directory, split)?;
     let predictions: HashMap<_, _> = read_json_lines(predictions_path)?
         .into_iter()
         .map(|line| serde_json::from_str::<PredictionRecord>(&line))
@@ -749,13 +765,19 @@ fn validate_manifest(directory: &Path, report: &mut ValidationReport) -> Result<
     Ok(())
 }
 
-fn load_samples(directory: &Path) -> Result<Vec<TrainingSample>, TrainingError> {
+fn load_samples(
+    directory: &Path,
+    selected_split: Option<DatasetSplit>,
+) -> Result<Vec<TrainingSample>, TrainingError> {
     let mut samples = Vec::new();
     for split in [
         DatasetSplit::Train,
         DatasetSplit::Validation,
         DatasetSplit::Test,
     ] {
+        if selected_split.is_some_and(|selected| selected != split) {
+            continue;
+        }
         for line in read_json_lines(&directory.join(split.file_name()))? {
             samples.push(serde_json::from_str(&line)?);
         }

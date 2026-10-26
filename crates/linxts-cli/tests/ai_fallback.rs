@@ -32,8 +32,9 @@ fn cli_uses_validated_local_ai_fallback() {
         .arg(&path)
         .arg("--verbose")
         .arg("--no-cache")
-        .env("LINXTS_LLAMA_3B_URL", endpoint)
-        .env("LINXTS_LLAMA_3B_MODEL", "mock-3b")
+        .env("LINXTS_LLAMA_MINI_URL", endpoint)
+        .env("LINXTS_LLAMA_MINI_MODEL", "mock-mini")
+        .env_remove("LINXTS_LLAMA_3B_URL")
         .env_remove("LINXTS_LLAMA_7B_URL")
         .env_remove("LINXTS_LLAMA_LARGE_URL")
         .output()
@@ -50,6 +51,29 @@ fn cli_uses_validated_local_ai_fallback() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("AI invoked: true"), "stderr: {stderr}");
     assert!(stderr.contains("tree-walking VM"), "stderr: {stderr}");
+}
+
+#[test]
+fn models_list_reports_configured_mini_tier() {
+    let output = Command::new(env!("CARGO_BIN_EXE_linxts"))
+        .args(["models", "list"])
+        .env("LINXTS_LLAMA_MINI_URL", "http://127.0.0.1:8079")
+        .env("LINXTS_LLAMA_MINI_MODEL", "linxts-mini-test")
+        .env_remove("LINXTS_LLAMA_3B_URL")
+        .env_remove("LINXTS_LLAMA_7B_URL")
+        .env_remove("LINXTS_LLAMA_LARGE_URL")
+        .output()
+        .expect("list models");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Mini: configured (LINXTS_LLAMA_MINI_URL, model=linxts-mini-test)"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("Local3B: not configured"),
+        "stdout: {stdout}"
+    );
 }
 
 #[test]
@@ -80,6 +104,7 @@ fn cli_reports_mock_escalation_attempts() {
         .arg(&path)
         .arg("--offline")
         .arg("--no-cache")
+        .env_remove("LINXTS_LLAMA_MINI_URL")
         .env("LINXTS_LLAMA_3B_URL", endpoint_3b)
         .env("LINXTS_LLAMA_3B_MODEL", "mock-3b")
         .env("LINXTS_LLAMA_7B_URL", endpoint_7b)

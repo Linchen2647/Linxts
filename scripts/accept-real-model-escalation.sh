@@ -17,6 +17,7 @@ for name in "${required[@]}"; do
     exit 2
   fi
 done
+unset LINXTS_LLAMA_MINI_URL LINXTS_LLAMA_MINI_MODEL
 unset LINXTS_LLAMA_LARGE_URL LINXTS_LLAMA_LARGE_MODEL
 
 for endpoint in "$LINXTS_LLAMA_3B_URL" "$LINXTS_LLAMA_7B_URL"; do

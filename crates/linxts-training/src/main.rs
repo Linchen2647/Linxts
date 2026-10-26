@@ -1,7 +1,7 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use linxts_training::{
-    DEFAULT_DATASET_SEED, benchmark_no_ai, benchmark_predictions, generate_dataset,
-    validate_dataset,
+    DEFAULT_DATASET_SEED, DatasetSplit, benchmark_no_ai_split, benchmark_predictions_split,
+    generate_dataset, validate_dataset,
 };
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -15,6 +15,25 @@ use std::process::ExitCode;
 struct Cli {
     #[command(subcommand)]
     command: Command,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum BenchmarkSplit {
+    Train,
+    Validation,
+    Test,
+    All,
+}
+
+impl BenchmarkSplit {
+    fn dataset_split(self) -> Option<DatasetSplit> {
+        match self {
+            Self::Train => Some(DatasetSplit::Train),
+            Self::Validation => Some(DatasetSplit::Validation),
+            Self::Test => Some(DatasetSplit::Test),
+            Self::All => None,
+        }
+    }
 }
 
 #[derive(Debug, Subcommand)]
@@ -38,6 +57,8 @@ enum Command {
         predictions: Option<PathBuf>,
         #[arg(long, default_value = "linxts-no-ai")]
         system: String,
+        #[arg(long, value_enum, default_value_t = BenchmarkSplit::Test)]
+        split: BenchmarkSplit,
     },
 }
 
@@ -72,11 +93,13 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             dataset,
             predictions,
             system,
+            split,
         } => {
+            let split = split.dataset_split();
             let report = if let Some(predictions) = predictions {
-                benchmark_predictions(&dataset, &predictions, &system)?
+                benchmark_predictions_split(&dataset, &predictions, &system, split)?
             } else {
-                benchmark_no_ai(&dataset)?
+                benchmark_no_ai_split(&dataset, split)?
             };
             println!("{}", serde_json::to_string_pretty(&report)?);
         }

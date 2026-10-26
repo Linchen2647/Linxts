@@ -19,7 +19,7 @@ Linxts explores a compiler model where users express intent in Python-, JavaScri
 AI fallback path:
 
 ```text
-unresolved -> llama.cpp 3B -> 7B -> optional larger local model
+unresolved -> Linxts-Mini -> llama.cpp 3B -> 7B -> optional larger local model
            -> strict candidate JSON -> IR validator -> VM
 ```
 
@@ -128,7 +128,7 @@ The current VM prints `10` and `50` for the mixed example. Integration coverage 
 | Chinese sum/even-range and simple variable arithmetic intents | Deterministic subset |
 | Python indentation and `for ... in range(...)` | Implemented subset; ranges lower to validated loop IR |
 | Full Python/JavaScript/Rust/C semantics | Not implemented |
-| llama.cpp structured fallback and 3B → 7B → larger-local escalation | Implemented, opt-in configuration |
+| llama.cpp structured fallback with configurable Mini → 3B → 7B → larger-local escalation | Router implemented; Linxts-Mini weights not trained yet |
 | AI timeout, retry, cancellation token, token/context budget, health check | Implemented |
 | Online model providers | Not implemented; router authorization gate exists |
 | Compilation cache | Implemented for successful validated compilations; native artifacts not cached yet |
@@ -144,6 +144,10 @@ Language adapters intentionally preserve distinct semantics as the project grows
 No model is downloaded automatically. Start compatible llama.cpp HTTP servers yourself, then configure one or more loopback endpoints:
 
 ```bash
+# Optional first tier after a Linxts-Mini model has passed acceptance:
+export LINXTS_LLAMA_MINI_URL=http://127.0.0.1:8079
+export LINXTS_LLAMA_MINI_MODEL=linxts-mini
+
 export LINXTS_LLAMA_3B_URL=http://127.0.0.1:8080
 export LINXTS_LLAMA_3B_MODEL=my-3b-model
 export LINXTS_LLAMA_7B_URL=http://127.0.0.1:8081
@@ -211,6 +215,8 @@ CI performs the same checks without GPU access, model files, or credentials.
 - [AI protocol](docs/ai-protocol.md)
 - [Local AI environment](docs/local-ai-environment.md)
 - [Real-model acceptance](docs/real-model-acceptance.md)
+- [Linxts-Mini training](docs/linxts-mini-training.md)
+- [Training workspace](training/README.md)
 - [Roadmap](docs/roadmap.md)
 
 ## Roadmap summary

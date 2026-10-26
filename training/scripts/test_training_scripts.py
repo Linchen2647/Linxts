@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = ROOT / "training" / "scripts"
+
+
+class TrainingScriptTests(unittest.TestCase):
+    def test_environment_probe_is_read_only_and_structured(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-I", str(SCRIPTS / "check_environment.py")],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        report = json.loads(result.stdout)
+        self.assertIn("training_ready", report)
+        self.assertIn("torch", report)
+        self.assertIn("packages", report)
+
+    def test_evaluator_refuses_missing_local_model(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                str(SCRIPTS / "evaluate_model.py"),
+                "--model",
+                "/definitely/missing/linxts-model",
+                "--dataset",
+                "/definitely/missing/dataset",
+                "--output",
+                "/definitely/missing/output.jsonl",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("downloads are disabled", result.stderr)
+
+    def test_format_smoke_excludes_verification_oracle(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="linxts-training-script-") as temporary:
+            root = Path(temporary)
+            dataset = root / "dataset"
+            dataset.mkdir()
+            record = {
+                "id": "format-smoke",
+                "task": "structured_ir_generation",
+                "input": {"source": "PRINT 1\n", "diagnostics": []},
+                "target": {"schema_version": "1", "status": "candidate"},
+                "verification": {"label_source": "must not enter prompt"},
+            }
+            encoded = json.dumps(record, ensure_ascii=False) + "\n"
+            (dataset / "train.jsonl").write_text(encoded, encoding="utf-8")
+            (dataset / "validation.jsonl").write_text(encoded, encoding="utf-8")
+            config = root / "config.toml"
+            config.write_text(
+                f'[dataset]\npath = "{dataset}"\nmax_length = 128\n',
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    str(SCRIPTS / "train_lora.py"),
+                    "--config",
+                    str(config),
+                    "--format-smoke",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            report = json.loads(result.stdout)
+            self.assertFalse(report["label_source_exposed"])
+            self.assertEqual(report["records"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

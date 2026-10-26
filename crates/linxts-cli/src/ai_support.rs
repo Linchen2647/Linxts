@@ -15,7 +15,13 @@ struct EndpointConfig {
     default_model: &'static str,
 }
 
-const ENDPOINTS: [EndpointConfig; 3] = [
+const ENDPOINTS: [EndpointConfig; 4] = [
+    EndpointConfig {
+        tier: ModelTier::Mini,
+        variable: "LINXTS_LLAMA_MINI_URL",
+        model_variable: "LINXTS_LLAMA_MINI_MODEL",
+        default_model: "linxts-mini",
+    },
     EndpointConfig {
         tier: ModelTier::Local3B,
         variable: "LINXTS_LLAMA_3B_URL",
@@ -71,7 +77,7 @@ pub fn attempt_fallback(source: &SourceFile, compilation: &mut Compilation, flag
         RoutePolicy {
             offline: flags.offline,
             online_authorized: false,
-            escalation_limit: 3,
+            escalation_limit: 4,
         },
         &CancellationToken::default(),
     ) {

@@ -37,14 +37,26 @@ The validator rejects unknown fields, duplicate content, cross-split `group_id` 
 
 ## Benchmark
 
-The no-AI deterministic baseline runs directly from the same frozen corpus:
+The no-AI deterministic baseline runs directly from the frozen **test split** by default:
 
 ```bash
 cargo run -p linxts-training --offline -- benchmark \
   --dataset training/data/seed-v1
 ```
 
-Model systems produce JSONL prediction records:
+Use `--split all` only for development diagnostics; model selection must use the untouched test split.
+
+After approval has placed a base model locally, generate prediction JSONL without allowing downloads:
+
+```bash
+python3 -I training/scripts/evaluate_model.py \
+  --model training/models/<local-base-model> \
+  --dataset training/data/seed-v1 \
+  --split test \
+  --output training/runs/<run>/predictions.jsonl
+```
+
+Add `--adapter training/runs/<run>/adapter` to evaluate a LoRA checkpoint. Model systems produce JSONL prediction records:
 
 ```json
 {"sample_id":"...","candidate":{},"latency_ms":12.5,"prompt_tokens":100,"completion_tokens":200}
@@ -60,6 +72,34 @@ cargo run -p linxts-training --offline -- benchmark \
 ```
 
 Reports include language detection accuracy, repair parse success, strict candidate schema validity, IR validator pass rate, execution correctness, latency, token counts, and escalation-required rate. Training loss is not an acceptance metric.
+
+## Environment and training entrypoint
+
+The environment probe is dependency-free and read-only:
+
+```bash
+python3 -I training/scripts/check_environment.py
+```
+
+Prompt formatting can be tested without PyTorch or a model:
+
+```bash
+python3 -I training/scripts/train_lora.py \
+  --config training/configs/qwen25-coder-05b-lora.toml \
+  --format-smoke
+```
+
+After explicit approval has supplied an isolated, pinned training environment and a local base-model directory, run the mandatory two-step optimizer smoke test:
+
+```bash
+python3 -I training/scripts/train_lora.py \
+  --config training/configs/qwen25-coder-05b-lora.toml \
+  --smoke-test
+```
+
+The script uses local-only model loading, refuses missing models and existing output directories, fixes Python/PyTorch/data seeds, records dependency and dataset manifests, supports gradient checkpointing, and resumes from the latest recorded checkpoint only when `--resume` is given. The ordinary LoRA configuration is the default. The 4-bit configuration is experimental and must not be used until its AMD-specific smoke test passes.
+
+The current host does not have PyTorch, Transformers, PEFT, Accelerate, bitsandbytes, or ROCm tooling installed, so only environment, dataset, benchmark, and prompt-format smoke checks have passed. No real optimizer smoke test has run yet.
 
 ## Artifact policy
 
