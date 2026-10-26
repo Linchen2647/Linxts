@@ -52,6 +52,67 @@ fn cli_uses_validated_local_ai_fallback() {
     assert!(stderr.contains("tree-walking VM"), "stderr: {stderr}");
 }
 
+#[test]
+fn cli_reports_mock_escalation_attempts() {
+    let source_text = "^自然語言\n請執行一個尚未被規則涵蓋的純輸出意圖\n";
+    let source = SourceFile::from_text(SourceId(0), "ai-escalation.lx", source_text);
+    let valid_outer = serde_json::json!({
+        "content": serde_json::to_string(&candidate(source.snapshot_hash())).expect("candidate JSON")
+    });
+    let invalid_outer = serde_json::json!({"content": "not candidate JSON"});
+    let (endpoint_3b, server_3b) =
+        serve_llama(serde_json::to_vec(&invalid_outer).expect("invalid response JSON"));
+    let (endpoint_7b, server_7b) =
+        serve_llama(serde_json::to_vec(&valid_outer).expect("valid response JSON"));
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "linxts-ai-escalation-{}-{unique}.lx",
+        std::process::id()
+    ));
+    std::fs::write(&path, source_text).expect("write source fixture");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_linxts"))
+        .arg("explain")
+        .arg(&path)
+        .arg("--offline")
+        .arg("--no-cache")
+        .env("LINXTS_LLAMA_3B_URL", endpoint_3b)
+        .env("LINXTS_LLAMA_3B_MODEL", "mock-3b")
+        .env("LINXTS_LLAMA_7B_URL", endpoint_7b)
+        .env("LINXTS_LLAMA_7B_MODEL", "mock-7b")
+        .env_remove("LINXTS_LLAMA_LARGE_URL")
+        .output()
+        .expect("run linxts explain");
+
+    let _ = std::fs::remove_file(path);
+    server_3b.join().expect("3B mock server");
+    server_7b.join().expect("7B mock server");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("AI invoked: true"), "stdout: {stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("accepted validated IR from mock-7b after 2 route attempt(s)"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("Local3B/local3b#1: provider response was invalid JSON"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("Local7B/local7b#1: valid candidate"),
+        "stderr: {stderr}"
+    );
+}
+
 fn candidate(source_hash: &str) -> CandidateEnvelope {
     let span = Default::default();
     let mut ir = Module::new(source_hash);

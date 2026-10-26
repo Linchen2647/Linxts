@@ -102,6 +102,20 @@ pub fn attempt_fallback(source: &SourceFile, compilation: &mut Compilation, flag
                 span: None,
                 suggestion: None,
             });
+            for attempt in &result.attempts {
+                compilation.diagnostics.push(Diagnostic {
+                    code: "LXT-AI-211".to_owned(),
+                    severity: Severity::Info,
+                    stage: Stage::Ai,
+                    message: format!(
+                        "{:?}/{}#{}: {}",
+                        attempt.tier, attempt.provider_id, attempt.attempt, attempt.outcome
+                    ),
+                    message_zh_tw: Some("本地模型路由嘗試紀錄".to_owned()),
+                    span: None,
+                    suggestion: None,
+                });
+            }
             for warning in result.candidate.warnings {
                 compilation.diagnostics.push(Diagnostic {
                     code: "LXT-AI-210".to_owned(),

@@ -25,6 +25,8 @@
 - [x] local 3B → 7B → optional larger model escalation
 - [x] timeout, retry, cancellation, and context/token budgets
 - [x] mock provider and offline CI tests
+- [x] reproducible real-model 3B → 7B acceptance runner and evidence specification
+- [ ] execute real-model acceptance with approved, hash-pinned GGUF artifacts
 - [x] validated AI candidate stored in the compilation cache
 - [ ] explicitly authorized, extensible online provider interface
 

@@ -158,6 +158,8 @@ The client uses llama.cpp's native `/health` and `/completion` endpoints. CLI co
 
 Every completion must contain a strict versioned candidate envelope. Source hash, schema version, side effects, scopes, calls, error nodes, and the entire IR are validated before the compiler replaces deterministic parse errors. Invalid JSON or IR escalates to the next configured local tier. No online provider is implemented or contacted.
 
+CI uses controlled mock HTTP providers only. Real-model acceptance has not yet been executed on this machine; [`scripts/accept-real-model-escalation.sh`](scripts/accept-real-model-escalation.sh) and the [acceptance specification](docs/real-model-acceptance.md) define the separate, hash-pinned 3B → 7B procedure without downloading models.
+
 ## Native compilation
 
 To produce and run a real Linux executable:
@@ -208,6 +210,7 @@ CI performs the same checks without GPU access, model files, or credentials.
 - [Repair engine](docs/repair-engine.md)
 - [AI protocol](docs/ai-protocol.md)
 - [Local AI environment](docs/local-ai-environment.md)
+- [Real-model acceptance](docs/real-model-acceptance.md)
 - [Roadmap](docs/roadmap.md)
 
 ## Roadmap summary

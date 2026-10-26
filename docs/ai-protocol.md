@@ -41,6 +41,6 @@ The `provider` field is optional in model output and is overwritten by the trust
 8. Enforce side-effect policy.
 9. Cache only the validated candidate and include provider/model identity in the key.
 
-Model self-reported confidence is advisory and never bypasses these checks. Invalid JSON, invalid IR, timeout, cancellation, and provider failure are distinct escalation outcomes.
+Model self-reported confidence is advisory and never bypasses these checks. Invalid JSON, invalid IR, timeout, cancellation, and provider failure are distinct escalation outcomes. Successful fallback emits one `LXT-AI-211` informational diagnostic per route attempt so real-model acceptance can distinguish a completed 3B inference failure from a health-check failure and a validated 7B candidate; these diagnostics contain provider identities and outcomes, not raw source.
 
 Online providers require explicit authorization before any source is transmitted. Logs must redact credentials and avoid storing raw prompts by default.
