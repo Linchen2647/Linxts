@@ -13,6 +13,7 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Inline known language hints without silently discarding trailing source.
 - Unterminated-string repair reuses existing structural closers to avoid cascading over-repair.
 - Linxts Unified IR v0.2 with validated cross-language format expressions, tree-walking VM support, and native backend lowering.
+- Python indentation suites and one-, two-, or three-argument `for ... in range(...)` loops with positive or negative literal steps.
 - Mixed-language top-level variables and a deterministic Chinese intent subset.
 - Versioned AI candidate protocol, recursive IR JSON Schema, and safety validation.
 - Local llama.cpp HTTP client with health checks and 3B → 7B → larger escalation.

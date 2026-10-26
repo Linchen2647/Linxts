@@ -15,7 +15,7 @@ Linxts is split into a small number of working crates rather than one crate per 
 1. The source manager reads bounded UTF-8 and computes a SHA-256 snapshot.
 2. The hint scanner recognizes line-level `^` markers while tracking quoted strings.
 3. The detector scores syntax and token features. Explicit known hints take precedence.
-4. The parser produces IR and diagnostics without panicking. Failed parsing retains partial error nodes.
+4. The parser produces IR and diagnostics without panicking. Python segments tokenize indentation boundaries; supported `for ... in range(...)` loops deterministically lower to an initializer plus condition-controlled loop. Failed parsing retains partial error nodes.
 5. In aggressive mode, deterministic repair runs for at most four passes and parsing is retried.
 6. Natural-language phrases covered by deterministic rules lower directly to IR.
 7. The deterministic IR validator rejects schema mismatches, unresolved error nodes, scope errors, bad calls, and excessive nesting.

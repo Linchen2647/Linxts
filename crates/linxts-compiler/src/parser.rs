@@ -29,12 +29,19 @@ impl ParsedUnit {
     }
 }
 
+enum BlockEnd {
+    Eof,
+    Brace,
+    Dedent,
+}
+
 pub struct Parser<'a> {
     tokens: Vec<Token>,
     cursor: usize,
     diagnostics: Vec<ParseDiagnostic>,
     functions: Vec<Function>,
     declared: &'a mut HashSet<String>,
+    indentation_sensitive: bool,
     depth: usize,
 }
 
@@ -45,17 +52,19 @@ impl<'a> Parser<'a> {
         base: usize,
         input: &str,
         declared: &'a mut HashSet<String>,
+        indentation_sensitive: bool,
     ) -> ParsedUnit {
-        let tokens = lex(source, base, input);
+        let tokens = lex(source, base, input, indentation_sensitive);
         let mut parser = Self {
             tokens,
             cursor: 0,
             diagnostics: Vec::new(),
             functions: Vec::new(),
             declared,
+            indentation_sensitive,
             depth: 0,
         };
-        let block = parser.parse_statements(false);
+        let block = parser.parse_statements(BlockEnd::Eof);
         ParsedUnit {
             block,
             functions: parser.functions,
@@ -63,12 +72,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_statements(&mut self, stop_at_brace: bool) -> Block {
+    fn parse_statements(&mut self, end: BlockEnd) -> Block {
         let mut statements = Vec::new();
-        let mut closed = !stop_at_brace;
+        let mut closed = matches!(end, BlockEnd::Eof);
         self.skip_separators();
         while !self.at(&TokenKind::Eof) {
-            if stop_at_brace && self.at(&TokenKind::RightBrace) {
+            let reached_end = match end {
+                BlockEnd::Eof => false,
+                BlockEnd::Brace => self.at(&TokenKind::RightBrace),
+                BlockEnd::Dedent => self.at(&TokenKind::Dedent),
+            };
+            if reached_end {
                 self.advance();
                 closed = true;
                 break;
@@ -79,10 +93,14 @@ impl<'a> Parser<'a> {
                 self.skip_separators();
                 continue;
             }
-            let before = self.cursor;
-            if let Some(statement) = self.parse_statement() {
-                statements.push(statement);
+            if self.at(&TokenKind::Indent) || self.at(&TokenKind::Dedent) {
+                self.error_here("LXT-122", "unexpected indentation boundary");
+                self.advance();
+                self.skip_separators();
+                continue;
             }
+            let before = self.cursor;
+            statements.extend(self.parse_next_statements());
             if self.cursor == before {
                 self.error_here("LXT-102", "parser made no progress");
                 self.advance();
@@ -90,9 +108,22 @@ impl<'a> Parser<'a> {
             self.skip_separators();
         }
         if !closed {
-            self.error_here("LXT-103", "missing closing brace");
+            let (code, message) = match end {
+                BlockEnd::Brace => ("LXT-103", "missing closing brace"),
+                BlockEnd::Dedent => ("LXT-123", "missing dedent at end of block"),
+                BlockEnd::Eof => unreachable!("top-level block is always closed"),
+            };
+            self.error_here(code, message);
         }
         Block { statements }
+    }
+
+    fn parse_next_statements(&mut self) -> Vec<Statement> {
+        if self.check_identifier("for") {
+            self.parse_for_range()
+        } else {
+            self.parse_statement().into_iter().collect()
+        }
     }
 
     fn parse_statement(&mut self) -> Option<Statement> {
@@ -343,6 +374,151 @@ impl<'a> Parser<'a> {
         Statement::new(StatementKind::Loop { condition, body }, merge(start, end))
     }
 
+    fn parse_for_range(&mut self) -> Vec<Statement> {
+        let start = self.advance().span;
+        let Some((name, name_span)) = self.take_identifier() else {
+            self.error_here("LXT-124", "expected loop variable after `for`");
+            self.synchronize();
+            return Vec::new();
+        };
+        if !self.consume_identifier("in") {
+            self.error_here("LXT-125", "expected `in` after loop variable");
+        }
+        if !self.consume_identifier("range") {
+            self.error_here("LXT-126", "only `range(...)` for-loops are supported");
+        }
+        if !self.consume(&TokenKind::LeftParen) {
+            self.error_here("LXT-127", "expected `(` after `range`");
+        }
+
+        let mut arguments = Vec::new();
+        while !self.at(&TokenKind::RightParen) && !self.at_separator() && !self.at(&TokenKind::Eof)
+        {
+            arguments.push(self.parse_expression(0));
+            if !self.consume(&TokenKind::Comma) {
+                break;
+            }
+        }
+        if !self.consume(&TokenKind::RightParen) {
+            self.error_here("LXT-128", "expected `)` after range arguments");
+        }
+
+        let arguments_valid = (1..=3).contains(&arguments.len());
+        if !arguments_valid {
+            self.error_here("LXT-129", "range expects one, two, or three arguments");
+        }
+        let fallback = Expression::integer(0, name_span);
+        let (initial, limit, step) = match arguments.as_slice() {
+            [limit] => (
+                Expression::integer(0, name_span),
+                limit.clone(),
+                Expression::integer(1, name_span),
+            ),
+            [initial, limit] => (
+                initial.clone(),
+                limit.clone(),
+                Expression::integer(1, name_span),
+            ),
+            [initial, limit, step] => (initial.clone(), limit.clone(), step.clone()),
+            _ => (
+                fallback.clone(),
+                fallback.clone(),
+                Expression::integer(1, name_span),
+            ),
+        };
+        let step_value = match &step.kind {
+            ExpressionKind::Literal(linxts_ir::Literal::Integer(value)) if *value != 0 => *value,
+            ExpressionKind::Unary {
+                operator: UnaryOperator::Negate,
+                operand,
+            } => match &operand.kind {
+                ExpressionKind::Literal(linxts_ir::Literal::Integer(0)) => {
+                    self.error_here("LXT-130", "range step cannot be zero");
+                    1
+                }
+                ExpressionKind::Literal(linxts_ir::Literal::Integer(value)) => {
+                    value.saturating_neg()
+                }
+                _ => {
+                    self.error_here("LXT-131", "range step must be an integer literal");
+                    1
+                }
+            },
+            ExpressionKind::Literal(linxts_ir::Literal::Integer(_)) => {
+                self.error_here("LXT-130", "range step cannot be zero");
+                1
+            }
+            _ => {
+                self.error_here("LXT-131", "range step must be an integer literal");
+                1
+            }
+        };
+
+        let newly_declared = self.declared.insert(name.clone());
+        let mut body = self.parse_required_block();
+        let increment_value = Expression::new(
+            ExpressionKind::Binary {
+                operator: BinaryOperator::Add,
+                left: Box::new(Expression::new(
+                    ExpressionKind::Variable { name: name.clone() },
+                    name_span,
+                )),
+                right: Box::new(step),
+            },
+            name_span,
+        );
+        body.statements.push(Statement::new(
+            StatementKind::Assignment {
+                name: name.clone(),
+                value: increment_value,
+            },
+            name_span,
+        ));
+
+        let initializer = Statement::new(
+            if newly_declared {
+                StatementKind::Variable {
+                    name: name.clone(),
+                    value: initial,
+                    mutable: true,
+                }
+            } else {
+                StatementKind::Assignment {
+                    name: name.clone(),
+                    value: initial,
+                }
+            },
+            merge(start, name_span),
+        );
+        let condition = Expression::new(
+            ExpressionKind::Binary {
+                operator: if step_value > 0 {
+                    BinaryOperator::Less
+                } else {
+                    BinaryOperator::Greater
+                },
+                left: Box::new(Expression::new(
+                    ExpressionKind::Variable { name },
+                    name_span,
+                )),
+                right: Box::new(limit),
+            },
+            name_span,
+        );
+        let end = body
+            .statements
+            .last()
+            .map_or(condition.span, |statement| statement.span);
+        let loop_statement =
+            Statement::new(StatementKind::Loop { condition, body }, merge(start, end));
+
+        if arguments_valid {
+            vec![initializer, loop_statement]
+        } else {
+            Vec::new()
+        }
+    }
+
     fn parse_return(&mut self) -> Statement {
         let start = self.advance().span;
         let value = if self.at_separator() || self.at(&TokenKind::RightBrace) {
@@ -478,18 +654,31 @@ impl<'a> Parser<'a> {
     fn parse_required_block(&mut self) -> Block {
         self.depth += 1;
         let block = if self.consume(&TokenKind::LeftBrace) {
-            self.parse_statements(true)
+            self.parse_statements(BlockEnd::Brace)
         } else {
             self.consume(&TokenKind::Colon);
-            self.skip_separators();
-            if self.at(&TokenKind::Eof) {
+            if self.consume(&TokenKind::Newline) {
+                while self.consume(&TokenKind::Newline) {}
+                if self.consume(&TokenKind::Indent) {
+                    self.parse_statements(BlockEnd::Dedent)
+                } else if self.indentation_sensitive {
+                    self.error_here("LXT-132", "expected an indented block");
+                    Block::default()
+                } else if self.at(&TokenKind::Eof) {
+                    self.error_here("LXT-115", "expected block body");
+                    Block::default()
+                } else {
+                    Block {
+                        statements: self.parse_next_statements(),
+                    }
+                }
+            } else if self.at(&TokenKind::Eof) {
                 self.error_here("LXT-115", "expected block body");
                 Block::default()
             } else {
-                self.parse_statement()
-                    .map_or_else(Block::default, |statement| Block {
-                        statements: vec![statement],
-                    })
+                Block {
+                    statements: self.parse_next_statements(),
+                }
             }
         };
         self.depth = self.depth.saturating_sub(1);
@@ -927,7 +1116,11 @@ mod tests {
     use super::*;
 
     fn parse(text: &str) -> ParsedUnit {
-        Parser::parse(SourceId(0), 0, text, &mut HashSet::new())
+        Parser::parse(SourceId(0), 0, text, &mut HashSet::new(), false)
+    }
+
+    fn parse_python(text: &str) -> ParsedUnit {
+        Parser::parse(SourceId(0), 0, text, &mut HashSet::new(), true)
     }
 
     #[test]
@@ -980,6 +1173,25 @@ mod tests {
                 })
             ));
         }
+    }
+
+    #[test]
+    fn parses_python_indentation_and_range_loop() {
+        let unit = parse_python(
+            "total = 0\nfor i in range(1, 4):\n    total = total + i\n    print(i)\nprint(total)\n",
+        );
+        assert!(unit.is_complete(), "{:?}", unit.diagnostics);
+        assert_eq!(unit.block.statements.len(), 4);
+        let StatementKind::Loop { body, .. } = &unit.block.statements[2].kind else {
+            panic!("range should lower to a condition-controlled loop");
+        };
+        assert_eq!(body.statements.len(), 3);
+    }
+
+    #[test]
+    fn rejects_unindented_python_block() {
+        let unit = parse_python("if true:\nprint(1)\n");
+        assert_eq!(unit.diagnostics[0].code, "LXT-132");
     }
 
     #[test]

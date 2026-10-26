@@ -126,7 +126,7 @@ The current VM prints `10` and `50` for the mixed example.
 | Functions, calls, parameters, return | Implemented subset |
 | Missing quote/parenthesis/brace repair and selected typo repair | Implemented |
 | Chinese sum/even-range and simple variable arithmetic intents | Deterministic subset |
-| Python indentation semantics | Not implemented |
+| Python indentation and `for ... in range(...)` | Implemented subset; ranges lower to validated loop IR |
 | Full Python/JavaScript/Rust/C semantics | Not implemented |
 | llama.cpp structured fallback and 3B → 7B → larger-local escalation | Implemented, opt-in configuration |
 | AI timeout, retry, cancellation token, token/context budget, health check | Implemented |
@@ -135,7 +135,9 @@ The current VM prints `10` and `50` for the mixed example.
 | Linux x86_64 native executable | Implemented through an explicit system-C bootstrap backend |
 | Direct Cranelift/LLVM backend | Planned |
 
-Language adapters intentionally preserve distinct semantics as the project grows; syntax resemblance does not imply Python, JavaScript, and Rust are interchangeable.
+The Python adapter recognizes space- or tab-indented suites after `:` and one-, two-, or three-argument `range` loops. The range step must be a nonzero integer literal; both ascending and descending ranges are supported. This remains a deliberate subset of Python rather than a Python runtime.
+
+Language adapters intentionally preserve distinct semantics as the project grows; syntax resemblance does not imply Python, JavaScript, Rust, and C are interchangeable.
 
 ## AI configuration
 

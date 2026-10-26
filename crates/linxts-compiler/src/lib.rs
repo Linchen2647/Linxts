@@ -157,6 +157,7 @@ impl Compiler {
                 segment.span.start,
                 &segment.text,
                 &mut trial_declared,
+                language == Language::Python,
             );
             if original.is_complete() {
                 declared = trial_declared;
@@ -185,6 +186,7 @@ impl Compiler {
                 segment.span.start,
                 &repaired.text,
                 &mut repaired_declared,
+                language == Language::Python,
             );
             if reparsed.is_complete() {
                 declared = repaired_declared;

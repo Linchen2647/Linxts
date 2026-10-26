@@ -14,7 +14,8 @@
 - [x] representative unit and integration tests
 - [x] GitHub Actions configuration
 - [x] basic C adapter (`int main`, integer declarations, `printf`, return)
-- [ ] broader Python indentation and JavaScript/Rust/C subset coverage
+- [x] Python indentation suites and `for ... in range(...)` lowering
+- [ ] broader Python and JavaScript/Rust/C subset coverage
 - [x] compilation cache for successful validated compilations
 
 ## Phase 2 — AI compilation

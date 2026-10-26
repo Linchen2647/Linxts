@@ -46,6 +46,18 @@ fn cross_language_formatting_shares_variables() {
 }
 
 #[test]
+fn python_indentation_and_range_execute() {
+    let source = "^python\ntotal = 0\nfor i in range(1, 5):\n    total = total + i\nprint(f\"total={total}\")\nfor j in range(3, 0, -1):\n    print(j)\n";
+    assert_eq!(execute(source), "total=10\n3\n2\n1\n");
+}
+
+#[test]
+fn aggressive_repair_preserves_python_indentation() {
+    let source = "^python\nfor i in range(2):\n    print(\"x\n";
+    assert_eq!(execute(source), "x\nx\n");
+}
+
+#[test]
 fn mixed_language_shares_values() {
     let source =
         "^python\nx = 10\n^javascript\nconsole.log(x)\n^自然語言\n把 x 乘以 5，然後顯示結果\n";
