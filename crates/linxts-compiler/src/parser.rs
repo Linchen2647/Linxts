@@ -1,7 +1,7 @@
 use crate::lexer::{Token, TokenKind, lex};
 use linxts_ir::{
-    BinaryOperator, Block, Expression, ExpressionKind, Function, Parameter, Statement,
-    StatementKind, Type, UnaryOperator,
+    BinaryOperator, Block, Expression, ExpressionKind, FormatSegment, Function, Parameter,
+    Statement, StatementKind, Type, UnaryOperator,
 };
 use linxts_source::{SourceId, Span};
 use std::collections::HashSet;
@@ -413,6 +413,8 @@ impl<'a> Parser<'a> {
 
     fn parse_print(&mut self) -> Statement {
         let start = self.current().span;
+        let c_style = self.check_identifier("printf");
+        let mut macro_style = false;
         if self.check_identifier("console") {
             self.advance();
             self.consume(&TokenKind::Dot);
@@ -423,14 +425,53 @@ impl<'a> Parser<'a> {
             }
         } else {
             self.advance();
-            self.consume(&TokenKind::Bang);
+            macro_style = self.consume(&TokenKind::Bang);
         }
         let parenthesized = self.consume(&TokenKind::LeftParen);
-        let expression = self.parse_expression(0);
+        let first = self.parse_expression(0);
+        let mut arguments = Vec::new();
+        while self.consume(&TokenKind::Comma) {
+            arguments.push(self.parse_expression(0));
+        }
         if parenthesized && !self.consume(&TokenKind::RightParen) {
             self.error_here("LXT-114", "expected `)` after print argument");
         }
-        let span = merge(start, expression.span);
+        let end = self.previous().span;
+        let span = merge(start, end);
+        let expression = if arguments.is_empty() && macro_style {
+            if let ExpressionKind::Literal(linxts_ir::Literal::String(template)) = &first.kind {
+                named_format(template, false, span)
+            } else {
+                first
+            }
+        } else if arguments.is_empty() {
+            first
+        } else if let ExpressionKind::Literal(linxts_ir::Literal::String(template)) = &first.kind {
+            match positional_format(template, arguments, c_style, span) {
+                Ok(expression) => expression,
+                Err(message) => {
+                    self.diagnostics.push(ParseDiagnostic {
+                        code: "LXT-119",
+                        message: message.clone(),
+                        span,
+                    });
+                    Expression::new(ExpressionKind::Error { message }, span)
+                }
+            }
+        } else {
+            let message = "formatted print requires a string template as its first argument";
+            self.diagnostics.push(ParseDiagnostic {
+                code: "LXT-119",
+                message: message.to_owned(),
+                span,
+            });
+            Expression::new(
+                ExpressionKind::Error {
+                    message: message.to_owned(),
+                },
+                span,
+            )
+        };
         Statement::new(StatementKind::Print(expression), span)
     }
 
@@ -505,6 +546,17 @@ impl<'a> Parser<'a> {
         match token.kind {
             TokenKind::Integer(value) => Expression::integer(value, token.span),
             TokenKind::String(value) => Expression::string(value, token.span),
+            TokenKind::Template(value) => named_format(&value, true, token.span),
+            TokenKind::Identifier(name)
+                if name.eq_ignore_ascii_case("f")
+                    && matches!(&self.current().kind, TokenKind::String(_)) =>
+            {
+                let string_token = self.advance().clone();
+                let TokenKind::String(value) = string_token.kind else {
+                    unreachable!("guard requires string token");
+                };
+                named_format(&value, false, merge(token.span, string_token.span))
+            }
             TokenKind::Identifier(name) if name.eq_ignore_ascii_case("true") => {
                 Expression::boolean(true, token.span)
             }
@@ -726,6 +778,142 @@ impl<'a> Parser<'a> {
     }
 }
 
+fn positional_format(
+    template: &str,
+    arguments: Vec<Expression>,
+    c_style: bool,
+    span: Span,
+) -> Result<Expression, String> {
+    let mut arguments = arguments.into_iter();
+    let mut segments = Vec::new();
+    let mut text = String::new();
+    let characters: Vec<char> = template.chars().collect();
+    let mut index = 0;
+    while index < characters.len() {
+        if c_style && characters[index] == '%' {
+            if characters.get(index + 1) == Some(&'%') {
+                text.push('%');
+                index += 2;
+                continue;
+            }
+            if matches!(characters.get(index + 1), Some('d' | 'i' | 's' | 'f')) {
+                flush_format_text(&mut segments, &mut text);
+                let value = arguments
+                    .next()
+                    .ok_or_else(|| "not enough values for printf placeholders".to_owned())?;
+                segments.push(FormatSegment::Value(value));
+                index += 2;
+                continue;
+            }
+            return Err("unsupported or incomplete printf placeholder".to_owned());
+        }
+        if !c_style && characters[index] == '{' {
+            if characters.get(index + 1) == Some(&'{') {
+                text.push('{');
+                index += 2;
+                continue;
+            }
+            if characters.get(index + 1) == Some(&'}') {
+                flush_format_text(&mut segments, &mut text);
+                let value = arguments
+                    .next()
+                    .ok_or_else(|| "not enough values for `{}` placeholders".to_owned())?;
+                segments.push(FormatSegment::Value(value));
+                index += 2;
+                continue;
+            }
+            return Err("only `{}` positional placeholders are supported".to_owned());
+        }
+        if !c_style && characters[index] == '}' && characters.get(index + 1) == Some(&'}') {
+            text.push('}');
+            index += 2;
+            continue;
+        }
+        text.push(characters[index]);
+        index += 1;
+    }
+    flush_format_text(&mut segments, &mut text);
+    if arguments.next().is_some() {
+        return Err("too many values for format placeholders".to_owned());
+    }
+    Ok(Expression::format(segments, span))
+}
+
+fn named_format(template: &str, javascript: bool, span: Span) -> Expression {
+    let mut segments = Vec::new();
+    let mut text = String::new();
+    let characters: Vec<char> = template.chars().collect();
+    let mut index = 0;
+    while index < characters.len() {
+        let opening = if javascript {
+            characters[index] == '$' && characters.get(index + 1) == Some(&'{')
+        } else {
+            characters[index] == '{' && characters.get(index + 1) != Some(&'{')
+        };
+        if !opening {
+            if !javascript && characters[index] == '{' && characters.get(index + 1) == Some(&'{') {
+                text.push('{');
+                index += 2;
+            } else if !javascript
+                && characters[index] == '}'
+                && characters.get(index + 1) == Some(&'}')
+            {
+                text.push('}');
+                index += 2;
+            } else {
+                text.push(characters[index]);
+                index += 1;
+            }
+            continue;
+        }
+
+        flush_format_text(&mut segments, &mut text);
+        index += if javascript { 2 } else { 1 };
+        let name_start = index;
+        while index < characters.len() && characters[index] != '}' {
+            index += 1;
+        }
+        if index == characters.len() {
+            return Expression::new(
+                ExpressionKind::Error {
+                    message: "unterminated interpolation placeholder".to_owned(),
+                },
+                span,
+            );
+        }
+        let name: String = characters[name_start..index].iter().collect();
+        if !is_simple_identifier(&name) {
+            return Expression::new(
+                ExpressionKind::Error {
+                    message: "interpolation supports simple variable names only".to_owned(),
+                },
+                span,
+            );
+        }
+        segments.push(FormatSegment::Value(Expression::new(
+            ExpressionKind::Variable { name },
+            span,
+        )));
+        index += 1;
+    }
+    flush_format_text(&mut segments, &mut text);
+    Expression::format(segments, span)
+}
+
+fn flush_format_text(segments: &mut Vec<FormatSegment>, text: &mut String) {
+    if !text.is_empty() {
+        segments.push(FormatSegment::Text(std::mem::take(text)));
+    }
+}
+
+fn is_simple_identifier(value: &str) -> bool {
+    let mut characters = value.chars();
+    characters
+        .next()
+        .is_some_and(|character| character == '_' || character.is_alphabetic())
+        && characters.all(|character| character == '_' || character.is_alphanumeric())
+}
+
 fn merge(start: Span, end: Span) -> Span {
     Span::new(
         start.source,
@@ -772,6 +960,26 @@ mod tests {
             unit.functions[0].body.statements[0].kind,
             StatementKind::Print(_)
         ));
+    }
+
+    #[test]
+    fn parses_cross_language_format_forms() {
+        for source in [
+            "x = 7\nprint(f\"value={x}\")\n",
+            "let x = 7; console.log(`value=${x}`);",
+            "let x = 7; println!(\"value={}\", x);",
+            "int x = 7; printf(\"value=%d\", x);",
+        ] {
+            let unit = parse(source);
+            assert!(unit.is_complete(), "{source}: {:?}", unit.diagnostics);
+            assert!(matches!(
+                unit.block.statements[1].kind,
+                StatementKind::Print(Expression {
+                    kind: ExpressionKind::Format { .. },
+                    ..
+                })
+            ));
+        }
     }
 
     #[test]

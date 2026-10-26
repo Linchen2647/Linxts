@@ -4,6 +4,7 @@ use linxts_source::{SourceId, Span};
 pub enum TokenKind {
     Integer(i64),
     String(String),
+    Template(String),
     Identifier(String),
     LeftParen,
     RightParen,
@@ -113,6 +114,38 @@ pub fn lex(source: SourceId, base: usize, input: &str) -> Vec<Token> {
                     TokenKind::String(value)
                 } else {
                     TokenKind::Error("unterminated string literal".to_owned())
+                };
+                push(&mut tokens, source, base, start, cursor, kind);
+            }
+            '`' => {
+                let start = cursor;
+                cursor += width;
+                let mut value = String::new();
+                let mut terminated = false;
+                while cursor < input.len() {
+                    let next = input[cursor..].chars().next().expect("valid cursor");
+                    cursor += next.len_utf8();
+                    if next == '`' {
+                        terminated = true;
+                        break;
+                    }
+                    if next == '\\' && cursor < input.len() {
+                        let escaped = input[cursor..].chars().next().expect("valid cursor");
+                        cursor += escaped.len_utf8();
+                        value.push(match escaped {
+                            'n' => '\n',
+                            'r' => '\r',
+                            't' => '\t',
+                            other => other,
+                        });
+                    } else {
+                        value.push(next);
+                    }
+                }
+                let kind = if terminated {
+                    TokenKind::Template(value)
+                } else {
+                    TokenKind::Error("unterminated template literal".to_owned())
                 };
                 push(&mut tokens, source, base, start, cursor, kind);
             }

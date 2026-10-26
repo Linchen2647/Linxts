@@ -1,8 +1,8 @@
-//! Tree-walking VM backend for Linxts Unified IR v0.1.
+//! Tree-walking VM backend for Linxts Unified IR v0.2.
 
 use linxts_ir::{
-    BinaryOperator, Block, Expression, ExpressionKind, Function, Literal, Module, StatementKind,
-    UnaryOperator,
+    BinaryOperator, Block, Expression, ExpressionKind, FormatSegment, Function, Literal, Module,
+    StatementKind, UnaryOperator,
 };
 use linxts_source::Span;
 use std::collections::HashMap;
@@ -248,6 +248,18 @@ impl<'a, W: Write> Vm<'a, W> {
                     .map(|argument| self.evaluate(argument))
                     .collect::<Result<Vec<_>, _>>()?;
                 self.call_function(callee, arguments, expression.span)
+            }
+            ExpressionKind::Format { segments } => {
+                let mut output = String::new();
+                for segment in segments {
+                    match segment {
+                        FormatSegment::Text(text) => output.push_str(text),
+                        FormatSegment::Value(value) => {
+                            output.push_str(&self.evaluate(value)?.to_string());
+                        }
+                    }
+                }
+                Ok(Value::String(output))
             }
             ExpressionKind::Error { message } => Err(RuntimeError::ErrorNode {
                 message: message.clone(),

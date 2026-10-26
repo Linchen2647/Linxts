@@ -1,5 +1,6 @@
 use linxts_ir::{
-    Block, Effect, Expression, ExpressionKind, Module, StatementKind, ValidationError, Validator,
+    Block, Effect, Expression, ExpressionKind, FormatSegment, IR_SCHEMA_VERSION, Module,
+    StatementKind, ValidationError, Validator,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -151,6 +152,13 @@ fn ensure_expression_effects(expression: &Expression) -> Result<(), CandidateVal
         ExpressionKind::Call { arguments, .. } => {
             for argument in arguments {
                 ensure_expression_effects(argument)?;
+            }
+        }
+        ExpressionKind::Format { segments } => {
+            for segment in segments {
+                if let FormatSegment::Value(value) = segment {
+                    ensure_expression_effects(value)?;
+                }
             }
         }
         ExpressionKind::Literal(_)
@@ -341,6 +349,43 @@ pub fn candidate_json_schema() -> serde_json::Value {
                                 }
                             }
                         }
+                    },
+                    {
+                        "type": "object", "additionalProperties": false,
+                        "required": ["kind", "data"],
+                        "properties": {
+                            "kind": {"const": "format"},
+                            "data": {
+                                "type": "object", "additionalProperties": false,
+                                "required": ["segments"],
+                                "properties": {
+                                    "segments": {
+                                        "type": "array", "maxItems": 1024,
+                                        "items": {"$ref": "#/$defs/formatSegment"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            "formatSegment": {
+                "oneOf": [
+                    {
+                        "type": "object", "additionalProperties": false,
+                        "required": ["kind", "data"],
+                        "properties": {
+                            "kind": {"const": "text"},
+                            "data": {"type": "string"}
+                        }
+                    },
+                    {
+                        "type": "object", "additionalProperties": false,
+                        "required": ["kind", "data"],
+                        "properties": {
+                            "kind": {"const": "value"},
+                            "data": {"$ref": "#/$defs/expression"}
+                        }
                     }
                 ]
             },
@@ -491,7 +536,7 @@ pub fn candidate_json_schema() -> serde_json::Value {
                 "type": "object", "additionalProperties": false,
                 "required": ["schema_version", "source_hash", "body", "functions"],
                 "properties": {
-                    "schema_version": {"const": "0.1"},
+                    "schema_version": {"const": IR_SCHEMA_VERSION},
                     "source_hash": {"type": "string", "minLength": 1, "maxLength": 128},
                     "body": {"$ref": "#/$defs/block"},
                     "functions": {

@@ -8,7 +8,7 @@
 - [x] deterministic staged language detection
 - [x] tolerant lexer/parser with partial error nodes
 - [x] bounded deterministic repair and audit records
-- [x] Unified IR v0.1 and validator
+- [x] Unified IR v0.2 with cross-language format expressions and validator
 - [x] tree-walking VM backend
 - [x] CLI commands and diagnostics
 - [x] representative unit and integration tests

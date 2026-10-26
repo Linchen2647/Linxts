@@ -3,7 +3,7 @@
 Linxts is split into a small number of working crates rather than one crate per future subsystem.
 
 - `linxts-source`: bounded UTF-8 loading, snapshots, source IDs, spans, and Unicode positions.
-- `linxts-ir`: Unified IR v0.1 plus structural, scope, call, and error-node validation.
+- `linxts-ir`: Unified IR v0.2 plus structural, scope, call, format-expression, and error-node validation.
 - `linxts-compiler`: hints, staged detection, lexer, tolerant parser, deterministic repair, natural-language deterministic lowering, pipeline diagnostics, and validated compilation cache.
 - `linxts-runtime`: local tree-walking VM with loop and call-depth limits.
 - `linxts-backend`: native system-C bootstrap code generator and toolchain driver.

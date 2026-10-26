@@ -125,7 +125,7 @@ impl LlamaCppProvider {
             "parser_diagnostics": request.diagnostics,
         });
         let prompt = format!(
-            "You are the Linxts compiler fallback. Return exactly one JSON object matching the supplied schema. Convert the source intent into Linxts IR schema 0.1. Preserve source_hash exactly. Do not emit markdown, prose, external effects, filesystem operations, process execution, networking, imports, FFI, or unresolved error nodes. If intent is unsafe or cannot be represented, do not fabricate capabilities.\nINPUT JSON:\n{}",
+            "You are the Linxts compiler fallback. Return exactly one JSON object matching the supplied schema. Convert the source intent into the current Linxts IR schema. Preserve source_hash exactly. Do not emit markdown, prose, external effects, filesystem operations, process execution, networking, imports, FFI, or unresolved error nodes. If intent is unsafe or cannot be represented, do not fabricate capabilities.\nINPUT JSON:\n{}",
             serde_json::to_string(&input)
                 .map_err(|error| ProviderError::InvalidJson(error.to_string()))?
         );

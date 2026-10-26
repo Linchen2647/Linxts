@@ -13,7 +13,7 @@ Linxts explores a compiler model where users express intent in Python-, JavaScri
 ```text
 .lx source -> source manager -> hint scanner -> detector
            -> tolerant parser -> deterministic repair (if needed)
-           -> Linxts IR v0.1 -> IR validator -> tree-walking VM
+           -> Linxts IR v0.2 -> IR validator -> tree-walking VM
 ```
 
 AI fallback path:
@@ -119,7 +119,8 @@ The current VM prints `10` and `50` for the mixed example.
 | `^python`, `^py`, `^javascript`, `^js`, `^rust`, `^c`, `^C語言`, descriptive and natural-language hints | Implemented |
 | Marker-free deterministic language detection | Implemented, heuristic scoring |
 | Integers, strings, booleans, variables, assignment, arithmetic, comparison | Implemented |
-| `print`, `Print`, `console.log`, `println!`, single-value `printf` | Implemented |
+| `print`, `Print`, `console.log`, `println!`, and `printf` | Implemented subset |
+| Python f-strings, JavaScript templates, Rust `{}`/captured placeholders, and C format placeholders | Implemented basic interpolation subset |
 | C `int`/`void` functions, integer declarations, `printf`, and return | Implemented subset |
 | Brace-delimited `if` and `while` | Implemented subset |
 | Functions, calls, parameters, return | Implemented subset |
@@ -201,7 +202,7 @@ CI performs the same checks without GPU access, model files, or credentials.
 
 - [Architecture](docs/architecture.md)
 - [Language hints](docs/language-hints.md)
-- [IR v0.1](docs/ir-spec.md)
+- [IR v0.2](docs/ir-spec.md)
 - [Repair engine](docs/repair-engine.md)
 - [AI protocol](docs/ai-protocol.md)
 - [Roadmap](docs/roadmap.md)

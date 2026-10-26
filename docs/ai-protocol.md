@@ -11,7 +11,7 @@ AI backends return a versioned JSON envelope. Raw source code is not an executab
   "language": "natural",
   "interpretation": "Print integers from 1 through 10",
   "ir": {
-    "schema_version": "0.1",
+    "schema_version": "0.2",
     "source_hash": "...",
     "body": { "statements": [] },
     "functions": []
@@ -24,6 +24,8 @@ AI backends return a versioned JSON envelope. Raw source code is not an executab
   }
 }
 ```
+
+The candidate schema recursively describes format segments as either literal text or nested value expressions. Format values are subject to the same scope, effect, depth, and source-binding checks as all other expressions.
 
 The `provider` field is optional in model output and is overwritten by the trusted backend with the actual provider/model identity.
 

@@ -12,7 +12,7 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Basic C hint/detection/parser adapter with `int main`, declarations, `printf`, and return.
 - Inline known language hints without silently discarding trailing source.
 - Unterminated-string repair reuses existing structural closers to avoid cascading over-repair.
-- Linxts Unified IR v0.1, validator, tree-walking VM, and CLI.
+- Linxts Unified IR v0.2 with validated cross-language format expressions, tree-walking VM support, and native backend lowering.
 - Mixed-language top-level variables and a deterministic Chinese intent subset.
 - Versioned AI candidate protocol, recursive IR JSON Schema, and safety validation.
 - Local llama.cpp HTTP client with health checks and 3B → 7B → larger escalation.
@@ -23,6 +23,6 @@ All notable changes to Linxts will be documented here. The project follows Seman
 
 ### Not yet available
 
-- online AI providers and validated AI cache.
-- native ELF/EXE/macOS binary generation.
-- complete Python, JavaScript, or Rust compatibility.
+- online AI providers.
+- direct native ELF/EXE/macOS code generation (Linux executables currently use the system-C bootstrap backend).
+- complete Python, JavaScript, Rust, or C compatibility.

@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 //! Validated AI fallback protocol and local llama.cpp escalation router.
 //!
 //! No model is downloaded or contacted unless a caller explicitly configures

@@ -40,6 +40,12 @@ fn natural_sum_has_expected_output() {
 }
 
 #[test]
+fn cross_language_formatting_shares_variables() {
+    let source = "^python\nx = 7\nprint(f\"py={x}\")\n^javascript\nconsole.log(`js=${x}`)\n^rust\nprintln!(\"rs={}\", x)\n^c\nprintf(\"c=%d\", x)\n";
+    assert_eq!(execute(source), "py=7\njs=7\nrs=7\nc=7\n");
+}
+
+#[test]
 fn mixed_language_shares_values() {
     let source =
         "^python\nx = 10\n^javascript\nconsole.log(x)\n^自然語言\n把 x 乘以 5，然後顯示結果\n";

@@ -3,8 +3,8 @@
 //! direct machine-code generation.
 
 use linxts_ir::{
-    BinaryOperator, Block, Expression, ExpressionKind, Function, Literal, Module, StatementKind,
-    UnaryOperator, Validator,
+    BinaryOperator, Block, Expression, ExpressionKind, FormatSegment, Function, Literal, Module,
+    StatementKind, UnaryOperator, Validator,
 };
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -309,6 +309,19 @@ impl Generator {
                     .join(", ");
                 Ok(format!("{}({arguments})", function_name(callee)))
             }
+            ExpressionKind::Format { segments } => {
+                let mut formatted = "lxt_string(\"\")".to_owned();
+                for segment in segments {
+                    let next = match segment {
+                        FormatSegment::Text(text) => format!("lxt_string({})", c_string(text)),
+                        FormatSegment::Value(value) => {
+                            format!("lxt_to_string({})", self.expression(value)?)
+                        }
+                    };
+                    formatted = format!("lxt_add({formatted}, {next})");
+                }
+                Ok(formatted)
+            }
             ExpressionKind::Error { message } => Err(BackendError::Unsupported(format!(
                 "error node reached code generation: {message}"
             ))),
@@ -373,6 +386,14 @@ static LxtValue lxt_int(long long value) { return (LxtValue){LXT_INT, value, NUL
 static LxtValue lxt_string(const char *value) { return (LxtValue){LXT_STRING, 0, value}; }
 static LxtValue lxt_boolean(int value) { return (LxtValue){LXT_BOOL, value != 0, NULL}; }
 static LxtValue lxt_unit(void) { return (LxtValue){LXT_UNIT, 0, NULL}; }
+static LxtValue lxt_to_string(LxtValue value) {
+    if (value.tag == LXT_STRING) return value;
+    if (value.tag == LXT_UNIT) return lxt_string("");
+    char *text = malloc(32); if (!text) lxt_fatal("LXT-NATIVE: allocation failed");
+    if (value.tag == LXT_INT) snprintf(text, 32, "%lld", value.integer);
+    else snprintf(text, 32, "%s", value.integer ? "true" : "false");
+    return lxt_string(text);
+}
 static int lxt_bool(LxtValue value) { if (value.tag != LXT_BOOL) lxt_fatal("LXT-NATIVE: expected boolean"); return value.integer != 0; }
 static LxtValue lxt_as_bool(LxtValue value) { return lxt_boolean(lxt_bool(value)); }
 static long long lxt_integer(LxtValue value) { if (value.tag != LXT_INT) lxt_fatal("LXT-NATIVE: expected integer"); return value.integer; }

@@ -18,7 +18,7 @@ mod linux {
         std::fs::create_dir_all(&root).expect("create fixture directory");
         let source = root.join("hello.lx");
         let executable = root.join("hello");
-        std::fs::write(&source, "PRINT 41 + 1\n").expect("write fixture");
+        std::fs::write(&source, "x = 41 + 1\nprint(f\"value={x}\")\n").expect("write fixture");
 
         let build = Command::new(env!("CARGO_BIN_EXE_linxts"))
             .arg("build")
@@ -41,7 +41,7 @@ mod linux {
             .output()
             .expect("run native executable");
         assert!(run.status.success());
-        assert_eq!(String::from_utf8_lossy(&run.stdout), "42\n");
+        assert_eq!(String::from_utf8_lossy(&run.stdout), "value=42\n");
         let _ = std::fs::remove_dir_all(root);
     }
 }
