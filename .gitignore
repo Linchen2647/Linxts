@@ -15,6 +15,8 @@
 *.tmp
 *.bak
 *.swp
+__pycache__/
+*.py[cod]
 .idea/
 .vscode/settings.json
 .claude/settings.local.json
