@@ -32,6 +32,7 @@
 
 - [x] simple top-level variables shared across deterministic segments
 - [x] simple natural-language arithmetic over a shared variable
+- [x] VM and native integration coverage for shared variables, functions, loops, and formatting
 - [ ] explicit cross-language conversion matrix
 - [ ] richer lexical scopes and function boundaries
 - [ ] module/import model

@@ -58,6 +58,12 @@ fn aggressive_repair_preserves_python_indentation() {
 }
 
 #[test]
+fn mixed_language_functions_loops_and_formatting_execute() {
+    let source = "^python\ndef add_one(value):\n    return value + 1\nseed = 4\n^javascript\nlet shared = add_one(seed);\nconsole.log(`js=${shared}`);\n^rust\nlet count = 0;\nwhile count < 3 {\n    count = count + 1;\n}\nprintln!(\"rs={}:{}\", shared, count);\n^c\nprintf(\"c=%d\", shared + count);\n";
+    assert_eq!(execute(source), "js=5\nrs=5:3\nc=8\n");
+}
+
+#[test]
 fn mixed_language_shares_values() {
     let source =
         "^python\nx = 10\n^javascript\nconsole.log(x)\n^自然語言\n把 x 乘以 5，然後顯示結果\n";

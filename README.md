@@ -109,7 +109,7 @@ console.log(x)
 把 x 乘以 5，然後顯示結果
 ```
 
-The current VM prints `10` and `50` for the mixed example.
+The current VM prints `10` and `50` for the mixed example. Integration coverage also exercises a Python-defined function called from JavaScript, a Rust-style loop over shared values, and formatted JavaScript/Rust/C output through both the VM and native bootstrap backend.
 
 ## Supported subset
 
