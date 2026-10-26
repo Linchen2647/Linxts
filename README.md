@@ -207,6 +207,7 @@ CI performs the same checks without GPU access, model files, or credentials.
 - [IR v0.2](docs/ir-spec.md)
 - [Repair engine](docs/repair-engine.md)
 - [AI protocol](docs/ai-protocol.md)
+- [Local AI environment](docs/local-ai-environment.md)
 - [Roadmap](docs/roadmap.md)
 
 ## Roadmap summary

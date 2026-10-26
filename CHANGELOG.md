@@ -21,6 +21,7 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Inference timeout, retry, cancellation, size/context/token, and authorization limits.
 - Versioned, atomic, size-bounded compilation cache with IR revalidation.
 - System-C bootstrap backend producing standalone Linux executables.
+- Reproducible local AI environment assessment covering llama.cpp availability and Vulkan/ROCm readiness.
 - CI configuration, documentation, examples, and tests.
 
 ### Not yet available
