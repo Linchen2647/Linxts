@@ -1,6 +1,6 @@
 # Linxts-Mini model and training assessment
 
-Assessment date: 2026-10-26. The initial inspection made no changes. After explicit approval, a user-local environment and one revision-pinned 0.5B base model were downloaded for bounded smoke testing; no system package, driver, system setting, or formal training run was started.
+Assessment updated: 2026-10-28. After explicit approval, a user-local environment, one revision-pinned 0.5B base model, bounded compatibility smokes, and two reproducible LoRA pilots were run. No system package, driver, or system setting was changed.
 
 ## Local environment
 
@@ -48,7 +48,7 @@ These are conservative planning ranges, not measured results:
 | Qwen2.5-Coder 0.5B | 4–8 GiB | 3–6 GiB | 12–20 GiB | roughly 2–8 hours for 1–3 epochs |
 | Qwen2.5-Coder 1.5B | 9–15 GiB | 5–10 GiB | 25–40 GiB | roughly 6–24 hours for 1–3 epochs |
 
-The bounded 0.5B LoRA smoke measured 2.86 GB peak allocated VRAM and 5.55 seconds for two optimizer steps. The corrected 100-step pilot measured 3.03 GB peak allocated VRAM, 432 seconds total, and 0.231 optimizer steps per second over 1,121 generated samples at sequence length 1024. Under the same workload only, 500 steps would be roughly 36 minutes; this is not an estimate for a larger model or longer sequences.
+The bounded 0.5B LoRA smoke measured 2.86 GB peak allocated VRAM and 5.55 seconds for two optimizer steps. The corrected 100-step pilot measured 3.03 GB peak allocated VRAM, 432 seconds total, and 0.231 optimizer steps per second over 1,121 generated samples at sequence length 1024. The final 300-step fallback-focused v2 run used 1,941 samples and sequence length 1,536; it completed in 1,222 seconds at 0.245 optimizer steps per second with 3.13 GB peak allocated VRAM. These measurements apply only to the pinned 0.5B workload, not a larger model.
 
 Actual memory depends on sequence length, tokenizer expansion of IR JSON, precision support, activation checkpointing, optimizer, and framework kernels. CPU fallback remains suitable for data and formatting tests, not for estimating full fine-tuning duration.
 
@@ -68,13 +68,17 @@ Actual memory depends on sequence length, tokenizer expansion of IR JSON, precis
 
 The training script calls `from_pretrained(..., local_files_only=True, trust_remote_code=False)`. It cannot silently download a model and refuses a missing local model directory. The smoke configuration uses a fixed seed, two steps, at most eight training and four validation records, cache-disabled data, and a new timestamped output directory.
 
-## Pilot result and next gate
+## Pilot results and next gate
 
-An explicitly authorized 100-step LoRA pilot completed on 995 training and 121 validation samples. A first run exposed a data-interface defect: the prompt omitted the trusted source hash even though the output was required to reproduce it. After adding `source_hash` to the model input, the corrected pilot completed in 432 seconds with 3.03 GB peak allocated VRAM and training loss 0.1086.
+The first explicitly authorized 100-step LoRA pilot used 995 training and 121 validation samples. A first run exposed a data-interface defect: the prompt omitted the trusted source hash even though the output was required to reproduce it. After adding `source_hash` to the model input, the corrected pilot completed in 432 seconds with 3.03 GB peak allocated VRAM and training loss 0.1086. It reached 40% strict schema validity, 40% IR-validator pass rate, and 20% execution correctness on five fixed holdouts, but did not solve the only fallback-required factorial case.
 
-Fixed-test results improved from 0% to 40% strict schema validity, 40% IR-validator pass rate, and 20% execution correctness. The JavaScript repair holdout executed correctly, but the natural-language factorial case—the only source that actually requires AI after deterministic compilation—remained non-JSON. Therefore the checkpoint is not selected, not converted to GGUF, and not configured in the router.
+The corpus was then expanded to 1,941 compiler-validated samples: 1,699 train, 221 validation, and 21 fixed test. It contains 820 inputs across 217 semantic groups that do not compile without AI. Four paraphrases for each generated semantic program share one split boundary. Tokenizer analysis found a maximum of 1,032 tokens and 31 examples over 1,024, so the run used sequence length 1,536; the trainer now rejects overlength labels instead of truncating them.
 
-The next training gate is corpus quality rather than raw step count: add more genuinely fallback-only natural-language, malformed mixed-language, and invalid-IR cases; enlarge the fixed test set; then authorize a longer run with an explicit time/step budget. QLoRA remains untested and bitsandbytes is not installed.
+The first 300-step expansion run was invalidated before selection when a semantic audit found that generated factorial-6 paraphrases duplicated the fixed factorial-6 holdout under a different `group_id`. The corrected v2 corpus excludes factorial 6 from generated training, substitutes factorial 16 to preserve corpus size, and includes a regression assertion for that exclusion.
+
+The authorized leak-free 300-step fallback-focused v2 run completed in 1,222 seconds with 3.13 GB peak allocated VRAM and training loss 0.04465. The pinned base model remained at 0% strict schema validity and execution correctness. The adapter reached 100% strict schema validity, 100% IR-validator pass rate, and 85.71% execution correctness across all 21 holdouts. All 17 holdouts that actually require AI fallback executed correctly, including the excluded factorial-6 test. The three failures were valid but semantically wrong outputs for C formatting, a mixed-language loop, and deterministic natural-language even-number generation.
+
+The adapter is a candidate for the next GGUF/llama.cpp acceptance stage, but it has not been merged, converted, or deployed. Router promotion remains gated on reproducible GGUF conversion and end-to-end llama.cpp testing; QLoRA remains untested and bitsandbytes is not installed.
 
 ## Sources
 

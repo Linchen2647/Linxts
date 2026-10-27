@@ -27,7 +27,8 @@
 - [x] compiler-validated Linxts-Mini seed dataset, split validator, and independent benchmark
 - [x] approved two-step 0.5B LoRA compatibility smoke and base/smoke-adapter benchmark
 - [x] compiler-validated 1,121-sample corpus and authorized 100-step LoRA pilot
-- [ ] expand fallback-focused holdouts and run a formally approved Mini/3B/7B comparison
+- [x] expand to a 1,941-sample fallback-focused corpus, 21 fixed holdouts, and a 300-step Mini pilot
+- [ ] run a formally approved Mini/3B/7B comparison
 - [x] timeout, retry, cancellation, and context/token budgets
 - [x] mock provider and offline CI tests
 - [x] reproducible real-model 3B → 7B acceptance runner and evidence specification

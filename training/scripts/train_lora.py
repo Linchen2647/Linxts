@@ -158,11 +158,15 @@ def main() -> int:
             target_ids = tokenizer(target, add_special_tokens=False)["input_ids"]
             if tokenizer.eos_token_id is not None:
                 target_ids.append(tokenizer.eos_token_id)
-            input_ids = (prompt_ids + target_ids)[:max_length]
-            prompt_length = min(len(prompt_ids), len(input_ids))
+            total_length = len(prompt_ids) + len(target_ids)
+            if total_length > max_length:
+                raise RuntimeError(
+                    f"sample {record['id']} needs {total_length} tokens, exceeding "
+                    f"configured max_length {max_length}; refusing to truncate its label"
+                )
+            input_ids = prompt_ids + target_ids
+            prompt_length = len(prompt_ids)
             labels = [-100] * prompt_length + input_ids[prompt_length:]
-            if all(label == -100 for label in labels):
-                raise RuntimeError(f"sample {record['id']} has no target tokens after truncation")
             return EncodedExample(input_ids=input_ids, labels=labels)
 
         def __len__(self) -> int:

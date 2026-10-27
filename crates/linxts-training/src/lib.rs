@@ -215,6 +215,7 @@ enum SeedSource {
 #[derive(Clone)]
 struct GeneratedSpec {
     id: String,
+    group_id: String,
     split: DatasetSplit,
     task: TrainingTask,
     language: CandidateLanguage,
@@ -226,6 +227,7 @@ struct GeneratedSpec {
 
 struct SampleDefinition<'a> {
     id: &'a str,
+    group_id: &'a str,
     split: DatasetSplit,
     task: TrainingTask,
     language: CandidateLanguage,
@@ -236,7 +238,9 @@ struct SampleDefinition<'a> {
 
 #[must_use]
 pub fn seed_count() -> usize {
-    seed_specs().len() + generated_specs(DEFAULT_DATASET_SEED).len()
+    seed_specs().len()
+        + generated_specs(DEFAULT_DATASET_SEED).len()
+        + fallback_specs(DEFAULT_DATASET_SEED).len()
 }
 
 pub fn generate_dataset(
@@ -259,6 +263,7 @@ pub fn generate_dataset(
         let label_source = specification.label_source.unwrap_or(&source).to_owned();
         let definition = SampleDefinition {
             id: specification.id,
+            group_id: specification.id,
             split: specification.split,
             task: specification.task,
             language: specification.language,
@@ -276,9 +281,13 @@ pub fn generate_dataset(
         }
         samples.push(sample);
     }
-    for specification in generated_specs(seed) {
+    for specification in generated_specs(seed)
+        .into_iter()
+        .chain(fallback_specs(seed))
+    {
         let definition = SampleDefinition {
             id: &specification.id,
+            group_id: &specification.group_id,
             split: specification.split,
             task: specification.task,
             language: specification.language,
@@ -690,7 +699,7 @@ fn build_sample(
     Ok(TrainingSample {
         schema_version: DATASET_SCHEMA_VERSION.to_owned(),
         id: format!("{}-{}", specification.id, &fingerprint[..12]),
-        group_id: specification.id.to_owned(),
+        group_id: specification.group_id.to_owned(),
         split: specification.split,
         task: specification.task,
         input: TrainingInput {
@@ -1009,6 +1018,7 @@ fn generated_specs(seed: u64) -> Vec<GeneratedSpec> {
         let id = format!("generated-{family}-{value}");
         specifications.push(GeneratedSpec {
             split: generated_split(&id, seed),
+            group_id: id.clone(),
             provenance_reference: format!(
                 "parameterized {family} family generated with fixed seed {seed}"
             ),
@@ -1118,6 +1128,240 @@ fn generated_specs(seed: u64) -> Vec<GeneratedSpec> {
         );
     }
     specifications
+}
+
+fn fallback_specs(seed: u64) -> Vec<GeneratedSpec> {
+    let mut specifications = Vec::new();
+    let mut add = |family: &str,
+                   value: i64,
+                   variant: usize,
+                   split: DatasetSplit,
+                   source: String,
+                   label_source: String,
+                   expected_stdout: String| {
+        let group_id = format!("fallback-{family}-{value}");
+        specifications.push(GeneratedSpec {
+            id: format!("{group_id}-v{variant}"),
+            group_id,
+            split,
+            task: TrainingTask::NaturalLanguageToIr,
+            language: CandidateLanguage::Natural,
+            source,
+            label_source,
+            expected_stdout,
+            provenance_reference: format!(
+                "compiler-verified fallback-only {family} family with fixed seed {seed}"
+            ),
+        });
+    };
+
+    let natural = |text: String| format!("^自然語言\n{text}\n");
+    for value in 3_i64..=16 {
+        if matches!(value, 6 | 11 | 13) {
+            continue;
+        }
+        let group = format!("fallback-factorial-{value}");
+        let split = generated_split(&group, seed);
+        let expected = (1..=value).product::<i64>();
+        let oracle = format!(
+            "result = 1\ni = 1\nwhile i <= {value} {{ result = result * i; i = i + 1; }}\nprint(result)\n"
+        );
+        let prompts = [
+            format!("請計算 {value} 的階乘並只輸出答案"),
+            format!("把1一路乘到{value}，顯示最後的數字"),
+            format!("求 {value}! 的整數結果"),
+            format!("計算從1到{value}的連乘積並印出"),
+        ];
+        for (variant, prompt) in prompts.into_iter().enumerate() {
+            add(
+                "factorial",
+                value,
+                variant,
+                split,
+                natural(prompt),
+                oracle.clone(),
+                format!("{expected}\n"),
+            );
+        }
+    }
+
+    for value in 10_i64..40 {
+        let families = [
+            "square-sum",
+            "countdown",
+            "maximum",
+            "arithmetic",
+            "function-square",
+            "divisible-by-two",
+        ];
+        for family in families {
+            let group = format!("fallback-{family}-{value}");
+            let split = generated_split(&group, seed);
+            let (oracle, expected, prompts) = fallback_family(family, value);
+            for (variant, prompt) in prompts.into_iter().enumerate() {
+                add(
+                    family,
+                    value,
+                    variant,
+                    split,
+                    natural(prompt),
+                    oracle.clone(),
+                    expected.clone(),
+                );
+            }
+        }
+    }
+
+    for value in 3_i64..=12 {
+        let group = format!("fallback-repeat-{value}");
+        let split = generated_split(&group, seed);
+        let oracle = format!("i = 0\nwhile i < {value} {{ print(\"Linxts\"); i = i + 1; }}\n");
+        let prompts = [
+            format!("請將 Linxts 顯示 {value} 次"),
+            format!("重複輸出文字 Linxts 共 {value} 次"),
+            format!("連續印出 {value} 行 Linxts"),
+            format!("執行 {value} 次 Linxts 文字輸出"),
+        ];
+        for (variant, prompt) in prompts.into_iter().enumerate() {
+            add(
+                "repeat",
+                value,
+                variant,
+                split,
+                natural(prompt),
+                oracle.clone(),
+                "Linxts\n".repeat(value as usize),
+            );
+        }
+    }
+
+    for (family, values) in [
+        ("factorial", vec![11_i64, 13]),
+        ("repeat", vec![13, 14]),
+        ("square-sum", vec![41, 43]),
+        ("countdown", vec![41, 43]),
+        ("maximum", vec![41, 43]),
+        ("arithmetic", vec![41, 43]),
+        ("function-square", vec![41, 43]),
+        ("divisible-by-two", vec![41, 43]),
+    ] {
+        for value in values {
+            let (oracle, expected, prompts) = if family == "factorial" {
+                (
+                    format!(
+                        "result = 1\ni = 1\nwhile i <= {value} {{ result = result * i; i = i + 1; }}\nprint(result)\n"
+                    ),
+                    format!("{}\n", (1..=value).product::<i64>()),
+                    vec![format!("求 {value}! 的整數結果")],
+                )
+            } else if family == "repeat" {
+                (
+                    format!("i = 0\nwhile i < {value} {{ print(\"Linxts\"); i = i + 1; }}\n"),
+                    "Linxts\n".repeat(value as usize),
+                    vec![format!("請將 Linxts 顯示 {value} 次")],
+                )
+            } else {
+                let (oracle, expected, prompts) = fallback_family(family, value);
+                (oracle, expected, vec![prompts[2].clone()])
+            };
+            add(
+                family,
+                value,
+                99,
+                DatasetSplit::Test,
+                natural(prompts[0].clone()),
+                oracle,
+                expected,
+            );
+        }
+    }
+    specifications
+}
+
+fn fallback_family(family: &str, value: i64) -> (String, String, Vec<String>) {
+    match family {
+        "square-sum" => {
+            let expected = value * (value + 1) * (2 * value + 1) / 6;
+            (
+                format!(
+                    "total = 0\ni = 1\nwhile i <= {value} {{ total = total + i * i; i = i + 1; }}\nprint(total)\n"
+                ),
+                format!("{expected}\n"),
+                vec![
+                    format!("將1到{value}每個整數平方後全部相加並輸出"),
+                    format!("依序計算1至{value}的平方，累加後顯示"),
+                    format!("印出1²加到{value}²的結果"),
+                    format!("把範圍1..{value}中的數各自平方再累加"),
+                ],
+            )
+        }
+        "countdown" => (
+            format!("i = {value}\nwhile i >= 1 {{ print(i); i = i - 1; }}\n"),
+            (1..=value)
+                .rev()
+                .map(|number| format!("{number}\n"))
+                .collect(),
+            vec![
+                format!("從{value}開始倒數到1，每個數字各印一行"),
+                format!("請逐行顯示{value}、{}直到1", value - 1),
+                format!("由{value}遞減輸出至1"),
+                format!("執行一個從{value}降到1的倒數輸出"),
+            ],
+        ),
+        "maximum" => {
+            let other = value + 7;
+            (
+                format!(
+                    "a = {value}\nb = {other}\nif a > b {{ print(a); }} else {{ print(b); }}\n"
+                ),
+                format!("{other}\n"),
+                vec![
+                    format!("比較{value}與{other}並輸出較大的數"),
+                    format!("請顯示{value}和{other}之中比較大的值"),
+                    format!("兩個整數{value}、{other}取大者輸出"),
+                    format!("判斷{value}是否大於{other}，最後印出最大值"),
+                ],
+            )
+        }
+        "arithmetic" => {
+            let other = value + 3;
+            let expected = (value + other) * 2;
+            (
+                format!("print(({value} + {other}) * 2)\n"),
+                format!("{expected}\n"),
+                vec![
+                    format!("先把{value}和{other}相加，再乘以2並輸出"),
+                    format!("計算（{value}＋{other}）的兩倍"),
+                    format!("顯示{value}加{other}後乘2的結果"),
+                    format!("對{value}與{other}求和，將答案加倍後印出"),
+                ],
+            )
+        }
+        "function-square" => (
+            format!("fn square(x) {{ return x * x; }}\nprint(square({value}))\n"),
+            format!("{}\n", value * value),
+            vec![
+                format!("定義平方函式並輸出{value}的平方"),
+                format!("建立一個回傳參數平方的函式，用它計算{value}"),
+                format!("透過函式呼叫顯示{value}乘自己的結果"),
+                format!("寫出 square 函式並印出 square({value})"),
+            ],
+        ),
+        "divisible-by-two" => (
+            format!("i = 1\nwhile i <= {value} {{ if i % 2 == 0 {{ print(i); }} i = i + 1; }}\n"),
+            (1..=value)
+                .filter(|number| number % 2 == 0)
+                .map(|number| format!("{number}\n"))
+                .collect(),
+            vec![
+                format!("輸出1到{value}中所有可被2整除的整數"),
+                format!("逐行顯示範圍1..{value}內除以2沒有餘數的值"),
+                format!("找出1至{value}中餘數為0的二倍數並印出"),
+                format!("檢查1到{value}，只輸出能整除2的數"),
+            ],
+        ),
+        _ => unreachable!("known fallback family"),
+    }
 }
 
 fn generated_split(group_id: &str, seed: u64) -> DatasetSplit {

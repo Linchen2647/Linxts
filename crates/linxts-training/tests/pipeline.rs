@@ -49,6 +49,7 @@ fn generated_dataset_is_reproducible_and_valid() {
 
     let report = validate_dataset(&first).expect("validate dataset");
     assert!(report.passed(), "{report:?}");
+    assert_eq!(seed_count(), 1_941);
     assert_eq!(report.total_samples, seed_count());
     for file in [
         "train.jsonl",
@@ -64,6 +65,27 @@ fn generated_dataset_is_reproducible_and_valid() {
     }
 
     let generated = samples(&first);
+    assert_eq!(
+        generated
+            .iter()
+            .filter(|sample| sample.split == DatasetSplit::Test)
+            .count(),
+        21
+    );
+    assert_eq!(
+        generated
+            .iter()
+            .filter(|sample| sample.group_id.starts_with("fallback-")
+                && sample.split == DatasetSplit::Test)
+            .count(),
+        16
+    );
+    assert!(
+        !generated
+            .iter()
+            .any(|sample| sample.group_id == "fallback-factorial-6"),
+        "the fixed factorial-6 holdout must not have an equivalent generated group"
+    );
     assert!(
         generated
             .iter()
