@@ -62,6 +62,13 @@
     "quantization": "none",
     "resumed_from": null
   },
+  "merge": {
+    "status": "merged_local_only",
+    "adapter_sha256": "5a1acc4a834e4135b28ec0e5587c09c93ce32a154cb576c2c86275a2addbf3f7",
+    "model_safetensors_sha256": "1603a9befebbf3c5ae19175576cf29cf03135122bc552d2aa08f53fbf039b62f",
+    "model_safetensors_bytes": 988097536,
+    "manifest_sha256": "20ac6d906e65cf45c17440d28d950a0228e056b6da6e998bbdb68da00c0a7909"
+  },
   "metrics": {
     "linxts_no_ai_test": {
       "language_detection_accuracy": 1.0,
@@ -93,6 +100,18 @@
       "completion_tokens": 12363,
       "escalation_required_rate": 0.1428571428571429
     },
+    "merged_model_test": {
+      "prediction_sha256": "e5b1774dc2f46eaeccb191e705c0459facf29e1debfb57f882156f966aa69c78",
+      "language_detection_accuracy": 1.0,
+      "repair_parse_success_rate": 1.0,
+      "ir_schema_validity": 1.0,
+      "ir_validator_pass_rate": 1.0,
+      "execution_correctness": 0.8571428571428571,
+      "average_latency_ms": 10852.880512427268,
+      "prompt_tokens": 3138,
+      "completion_tokens": 12381,
+      "escalation_required_rate": 0.1428571428571429
+    },
     "ai_required_holdouts": {
       "samples": 17,
       "schema_valid": 17,
@@ -119,6 +138,7 @@
     }
   ],
   "selected_checkpoint": "training/runs/qwen25-coder-05b-lora-fallback-v2/adapter",
+  "selected_merged_model": "training/models/Linxts-Mini-fallback-v2-merged",
   "gguf": null,
   "router_deployed": false,
   "notes": [
@@ -127,6 +147,7 @@
     "All 21 v2 predictions passed strict CandidateEnvelope deserialization and IR validation.",
     "All 17 holdouts that require AI fallback executed correctly, including the excluded factorial-6 holdout.",
     "Three deterministic-supported cross-task holdouts produced valid but semantically incorrect IR, leaving overall execution correctness at 85.71%.",
-    "The adapter is selected only as a candidate for GGUF and llama.cpp acceptance; it has not been merged, converted, or configured in the router."
+    "The adapter was merged locally and the merged Transformers model reproduced 100% schema/validator validity and 85.71% execution correctness.",
+    "GGUF conversion and llama.cpp router deployment remain pending because no local conversion or llama.cpp tools are installed."
   ]
 }

@@ -99,11 +99,23 @@ python3 -I training/scripts/train_lora.py \
 
 The script uses local-only model loading, refuses missing models and existing output directories, fixes Python/PyTorch/data seeds, records dependency and dataset manifests, supports gradient checkpointing, and resumes from the latest recorded checkpoint only when `--resume` is given. It also rejects any example that exceeds the configured sequence length instead of silently truncating a trusted target; the expanded corpus uses length 1,536 after tokenizer analysis found a 1,032-token maximum. The ordinary LoRA configuration is the default. The 4-bit configuration is experimental and must not be used until its AMD-specific smoke test passes.
 
+Merge a selected adapter without network access or remote model code:
+
+```bash
+python3 -I training/scripts/merge_adapter.py \
+  --model training/models/Qwen2.5-Coder-0.5B-Instruct \
+  --adapter training/runs/qwen25-coder-05b-lora-fallback-v2/adapter \
+  --output training/models/Linxts-Mini-fallback-v2-merged \
+  --revision ea3f2471cf1b1f0db85067f1ef93848e38e88c25
+```
+
+The merger refuses missing inputs and existing outputs, uses `local_files_only=True` and `trust_remote_code=False`, applies PEFT safe merge, writes safetensors through a temporary directory, and records adapter and merged-weight SHA-256 values. Merged models remain ignored Git artifacts.
+
 The approved isolated ROCm environment and pinned Qwen2.5-Coder-0.5B model completed a real two-step LoRA optimizer smoke on the RX 6800 XT. The exact package lock and experiment record are checked in. This proves bounded pipeline compatibility only: the smoke adapter scored 0% strict schema validity on the fixed test split and is not eligible for router use or release.
 
 A subsequent authorized 100-step pilot trained on 995 generated examples after correcting the prompt to include the trusted source hash. It reached 40% strict schema validity, 40% IR-validator pass rate, and 20% execution correctness on the five fixed holdouts. The only deterministic-fallback holdout remained unsolved, so the pilot checkpoint was not eligible for router use or GGUF release.
 
-The first expanded run was invalidated after a semantic audit found factorial 6 in both generated training data and a fixed holdout under different group IDs. The corrected fallback-v2 corpus excludes that semantic holdout and adds a regression assertion. Its leak-free run trained for 300 optimizer steps on the 1,699/221 train/validation split. On 21 fixed holdouts, all predictions passed strict schema and IR validation, 18 executed correctly (85.71%), and all 17 cases that actually require AI fallback—including the excluded factorial-6 test—executed correctly. Three deterministic-supported cross-task cases remained semantically wrong. The adapter is therefore recorded as a candidate for GGUF/llama.cpp acceptance, not as a deployed or production-accepted Mini tier.
+The first expanded run was invalidated after a semantic audit found factorial 6 in both generated training data and a fixed holdout under different group IDs. The corrected fallback-v2 corpus excludes that semantic holdout and adds a regression assertion. Its leak-free run trained for 300 optimizer steps on the 1,699/221 train/validation split. On 21 fixed holdouts, all predictions passed strict schema and IR validation, 18 executed correctly (85.71%), and all 17 cases that actually require AI fallback—including the excluded factorial-6 test—executed correctly. Three deterministic-supported cross-task cases remained semantically wrong. The selected adapter was merged locally into safetensors and the merged model reproduced the same schema, validator, and execution rates. It remains a candidate for GGUF/llama.cpp acceptance, not a deployed or production-accepted Mini tier.
 
 ## Artifact policy
 

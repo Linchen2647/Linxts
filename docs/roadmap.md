@@ -28,6 +28,8 @@
 - [x] approved two-step 0.5B LoRA compatibility smoke and base/smoke-adapter benchmark
 - [x] compiler-validated 1,121-sample corpus and authorized 100-step LoRA pilot
 - [x] expand to a 1,941-sample fallback-focused corpus, 21 fixed holdouts, and a 300-step Mini pilot
+- [x] merge and re-evaluate the selected Mini adapter with local-only safetensors tooling
+- [ ] convert the selected Mini model to GGUF and execute llama.cpp acceptance
 - [ ] run a formally approved Mini/3B/7B comparison
 - [x] timeout, retry, cancellation, and context/token budgets
 - [x] mock provider and offline CI tests

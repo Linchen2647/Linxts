@@ -54,6 +54,26 @@ class TrainingScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("downloads are disabled", result.stderr)
 
+    def test_merger_refuses_missing_local_inputs(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                str(SCRIPTS / "merge_adapter.py"),
+                "--model",
+                "/definitely/missing/linxts-model",
+                "--adapter",
+                "/definitely/missing/linxts-adapter",
+                "--output",
+                "/definitely/missing/merged-model",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("downloads are disabled", result.stderr)
+
     def test_format_smoke_excludes_verification_oracle(self) -> None:
         with tempfile.TemporaryDirectory(prefix="linxts-training-script-") as temporary:
             root = Path(temporary)

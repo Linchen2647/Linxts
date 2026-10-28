@@ -78,7 +78,7 @@ The first 300-step expansion run was invalidated before selection when a semanti
 
 The authorized leak-free 300-step fallback-focused v2 run completed in 1,222 seconds with 3.13 GB peak allocated VRAM and training loss 0.04465. The pinned base model remained at 0% strict schema validity and execution correctness. The adapter reached 100% strict schema validity, 100% IR-validator pass rate, and 85.71% execution correctness across all 21 holdouts. All 17 holdouts that actually require AI fallback executed correctly, including the excluded factorial-6 test. The three failures were valid but semantically wrong outputs for C formatting, a mixed-language loop, and deterministic natural-language even-number generation.
 
-The adapter is a candidate for the next GGUF/llama.cpp acceptance stage, but it has not been merged, converted, or deployed. Router promotion remains gated on reproducible GGUF conversion and end-to-end llama.cpp testing; QLoRA remains untested and bitsandbytes is not installed.
+The selected adapter was then merged locally with PEFT safe merge into a 988,097,536-byte safetensors model. The merged model reproduced 100% strict schema validity, 100% validator pass rate, and 85.71% execution correctness on the same test split. It is a candidate for the next GGUF/llama.cpp acceptance stage, but it has not been converted to GGUF or deployed. Router promotion remains gated on reproducible GGUF conversion and end-to-end llama.cpp testing; QLoRA remains untested and bitsandbytes is not installed.
 
 ## Sources
 
