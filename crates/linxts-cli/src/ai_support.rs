@@ -278,7 +278,11 @@ fn configured_stages() -> (Vec<ProviderStage>, Vec<String>) {
         let model = std::env::var(endpoint.model_variable)
             .unwrap_or_else(|_| endpoint.default_model.to_owned());
         let id = format!("{:?}", endpoint.tier).to_lowercase();
-        match LlamaCppProvider::new(id, model, &url) {
+        let provider = match endpoint.tier {
+            ModelTier::Mini => LlamaCppProvider::new_mini(id, model, &url),
+            _ => LlamaCppProvider::new(id, model, &url),
+        };
+        match provider {
             Ok(provider) => stages.push(ProviderStage {
                 tier: endpoint.tier,
                 provider: Box::new(provider),

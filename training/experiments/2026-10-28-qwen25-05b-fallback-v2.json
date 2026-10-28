@@ -1,5 +1,5 @@
 {
-  "status": "training_completed_candidate_not_deployed",
+  "status": "accepted_for_local_mini_fallback_not_persistently_deployed",
   "run_id": "2026-10-28-qwen25-coder-05b-lora-fallback-v2",
   "git": {
     "base_commit": "5ca6e18d77207c06339a437cbe131e8c197ef00a",
@@ -42,7 +42,8 @@
   },
   "environment": {
     "python": "3.12.13",
-    "lock_sha256": "78a8f3917693f24b239b2c8a8b647d20aa7cca8d918f50b8b11f5e3037fa8b02",
+    "training_lock_sha256": "78a8f3917693f24b239b2c8a8b647d20aa7cca8d918f50b8b11f5e3037fa8b02",
+    "final_lock_sha256": "5103a6f4b64d6d80abcf1414cd35103647cf5fae0d424b036c7002763e30833f",
     "gpu": "AMD Radeon RX 6800 XT",
     "driver": "amdgpu",
     "torch": "2.14.0+rocm7.14",
@@ -112,12 +113,42 @@
       "completion_tokens": 12381,
       "escalation_required_rate": 0.1428571428571429
     },
+    "f16_gguf_vulkan_test": {
+      "prediction_sha256": "74b0df91db8269900b525527d254499545d3d87ff992833235400a92b7197f29",
+      "language_detection_accuracy": 1.0,
+      "repair_parse_success_rate": 1.0,
+      "ir_schema_validity": 1.0,
+      "ir_validator_pass_rate": 1.0,
+      "execution_correctness": 0.8571428571428571,
+      "average_latency_ms": 2135.2090765230105,
+      "prompt_tokens": 3138,
+      "completion_tokens": 12491,
+      "escalation_required_rate": 0.1428571428571429
+    },
+    "q4_k_m_gguf_vulkan_test": {
+      "prediction_sha256": "f30fe0a9aa86158f9f55dd977feeb3aa96daf809bf418f9f8552e0c7cf25c037",
+      "language_detection_accuracy": 0.9047619047619048,
+      "repair_parse_success_rate": 1.0,
+      "ir_schema_validity": 0.9047619047619048,
+      "ir_validator_pass_rate": 0.9047619047619048,
+      "execution_correctness": 0.8571428571428571,
+      "average_latency_ms": 1511.8221818078641,
+      "prompt_tokens": 3138,
+      "completion_tokens": 12538,
+      "escalation_required_rate": 0.1428571428571429
+    },
     "ai_required_holdouts": {
       "samples": 17,
       "schema_valid": 17,
       "validator_valid": 17,
       "execution_correct": 17,
-      "execution_correctness": 1.0
+      "execution_correctness": 1.0,
+      "systems_passing": [
+        "adapter",
+        "merged_transformers",
+        "f16_gguf_vulkan",
+        "q4_k_m_gguf_vulkan"
+      ]
     }
   },
   "failed_execution_holdouts": [
@@ -139,8 +170,36 @@
   ],
   "selected_checkpoint": "training/runs/qwen25-coder-05b-lora-fallback-v2/adapter",
   "selected_merged_model": "training/models/Linxts-Mini-fallback-v2-merged",
-  "gguf": null,
+  "selected_gguf": "training/models/Linxts-Mini-fallback-v2-Q4_K_M.gguf",
+  "gguf": {
+    "llama_cpp": {
+      "release": "b11910",
+      "commit": "63b4b303bd87456adc2f09d56c7e1f74e9e26673",
+      "vulkan_binary_sha256": "5c36ff10fec9bb1c9a8cf52d7daf93a0a618de59a76f9dc30aa5727fd40536c0"
+    },
+    "converter_dependencies": {
+      "sentencepiece": "0.2.2",
+      "protobuf": "4.25.9"
+    },
+    "f16": {
+      "bytes": 994156672,
+      "sha256": "6f159ad1402d1371a52af3d54692def8f53dbd1cac7b5dda97ff5e806e26d3bd"
+    },
+    "q4_k_m": {
+      "bytes": 397807744,
+      "sha256": "65097bf975a7beb6f7b1c5d7c4fd84bfc1adde8b519eb0e5b3e7b4997f893ee6"
+    },
+    "device": "Vulkan0: AMD Radeon RX 6800 XT (RADV NAVI21)"
+  },
   "router_deployed": false,
+  "router_acceptance": {
+    "status": "passed_for_ai_required_scope",
+    "model": "Linxts-Mini-fallback-v2-Q4_K_M.gguf",
+    "prompt_profile": "linxts-mini-v1-unconstrained-with-post-validation",
+    "smoke_source": "fixed factorial-6 AI-required holdout",
+    "stdout": "720\n",
+    "ai_invoked": true
+  },
   "notes": [
     "Fallback v1 was invalidated after a semantic audit found factorial-6 in both generated training data and a fixed holdout.",
     "Fallback v2 excludes factorial-6 and adds a regression assertion preventing that equivalent generated group.",
@@ -148,6 +207,9 @@
     "All 17 holdouts that require AI fallback executed correctly, including the excluded factorial-6 holdout.",
     "Three deterministic-supported cross-task holdouts produced valid but semantically incorrect IR, leaving overall execution correctness at 85.71%.",
     "The adapter was merged locally and the merged Transformers model reproduced 100% schema/validator validity and 85.71% execution correctness.",
-    "GGUF conversion and llama.cpp router deployment remain pending because no local conversion or llama.cpp tools are installed."
+    "F16 GGUF reproduced the merged-model rates through the pinned Vulkan llama.cpp server at 2.14 seconds average latency.",
+    "Q4_K_M reduced the artifact to 397,807,744 bytes and latency to 1.51 seconds while preserving 17/17 AI-required execution correctness; two deterministic-supported cases reached the token limit and were not valid JSON.",
+    "The original schema-constrained generic router prompt produced invalid IR for Mini, so Mini now uses its training prompt without generation grammar and retains strict post-generation CandidateEnvelope and IR validation.",
+    "A real end-to-end Mini-tier factorial-6 run invoked AI and printed 720; persistent router configuration remains opt-in."
   ]
 }

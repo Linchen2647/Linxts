@@ -78,7 +78,11 @@ The first 300-step expansion run was invalidated before selection when a semanti
 
 The authorized leak-free 300-step fallback-focused v2 run completed in 1,222 seconds with 3.13 GB peak allocated VRAM and training loss 0.04465. The pinned base model remained at 0% strict schema validity and execution correctness. The adapter reached 100% strict schema validity, 100% IR-validator pass rate, and 85.71% execution correctness across all 21 holdouts. All 17 holdouts that actually require AI fallback executed correctly, including the excluded factorial-6 test. The three failures were valid but semantically wrong outputs for C formatting, a mixed-language loop, and deterministic natural-language even-number generation.
 
-The selected adapter was then merged locally with PEFT safe merge into a 988,097,536-byte safetensors model. The merged model reproduced 100% strict schema validity, 100% validator pass rate, and 85.71% execution correctness on the same test split. It is a candidate for the next GGUF/llama.cpp acceptance stage, but it has not been converted to GGUF or deployed. Router promotion remains gated on reproducible GGUF conversion and end-to-end llama.cpp testing; QLoRA remains untested and bitsandbytes is not installed.
+The selected adapter was then merged locally with PEFT safe merge into a 988,097,536-byte safetensors model. The merged model reproduced 100% strict schema validity, 100% validator pass rate, and 85.71% execution correctness on the same test split.
+
+With explicit approval, official llama.cpp release `b11910` at commit `63b4b303bd87456adc2f09d56c7e1f74e9e26673` and its SHA-256-verified Vulkan binary were used for local conversion and acceptance. The 994,156,672-byte F16 GGUF reproduced 100% schema/validator validity and 85.71% execution correctness at 2.14 seconds average latency. Q4_K_M reduced the artifact to 397,807,744 bytes and 1.51 seconds average latency. It preserved 17/17 execution correctness for inputs that actually require AI, while two deterministic-supported cases exhausted the output budget and reduced full-split schema validity to 90.48%.
+
+The generic recursive llama.cpp generation grammar forced the Mini model into schema-shaped but semantically invalid IR. The Mini endpoint now uses the exact training prompt without generation grammar, while retaining strict CandidateEnvelope, source-hash, policy, and IR post-validation. A real Q4_K_M Vulkan request through the Mini router tier invoked AI for the excluded factorial-6 holdout and printed `720`. This passes the defined AI-required scope, but endpoint configuration remains opt-in and the model is not a general replacement for deterministic compilation. QLoRA remains untested and bitsandbytes is not installed.
 
 ## Sources
 
@@ -90,3 +94,5 @@ The selected adapter was then merged locally with PEFT safe merge into a 988,097
 - [ROCm Linux system requirements](https://github.com/ROCm/rocm-install-on-linux/blob/develop/docs/reference/system-requirements.rst)
 - [PyTorch local installation and Linux requirements](https://pytorch.org/get-started/locally/)
 - [bitsandbytes current installation and AMD targets](https://github.com/bitsandbytes-foundation/bitsandbytes/blob/main/docs/source/installation.mdx)
+- [llama.cpp release b11910](https://github.com/ggml-org/llama.cpp/releases/tag/b11910)
+- [llama.cpp repository](https://github.com/ggml-org/llama.cpp)

@@ -111,11 +111,25 @@ python3 -I training/scripts/merge_adapter.py \
 
 The merger refuses missing inputs and existing outputs, uses `local_files_only=True` and `trust_remote_code=False`, applies PEFT safe merge, writes safetensors through a temporary directory, and records adapter and merged-weight SHA-256 values. Merged models remain ignored Git artifacts.
 
+After separately approving and placing a pinned llama.cpp checkout and binary under ignored `training/tools/`, convert the merged model with commit verification:
+
+```bash
+python3 -I training/scripts/convert_gguf.py \
+  --llama-source training/tools/llama.cpp-source-b11910 \
+  --expected-commit 63b4b303bd87456adc2f09d56c7e1f74e9e26673 \
+  --model training/models/Linxts-Mini-fallback-v2-merged \
+  --output training/models/Linxts-Mini-fallback-v2-f16.gguf \
+  --outtype f16 \
+  --model-name Linxts-Mini-fallback-v2
+```
+
+`evaluate_llama_cpp.py` accepts loopback HTTP only and produces the same prediction JSONL format as the Transformers evaluator. The recorded acceptance used the SHA-256-verified llama.cpp `b11910` Vulkan binary for F16 and Q4_K_M GGUF evaluation; no tool or model artifact is committed.
+
 The approved isolated ROCm environment and pinned Qwen2.5-Coder-0.5B model completed a real two-step LoRA optimizer smoke on the RX 6800 XT. The exact package lock and experiment record are checked in. This proves bounded pipeline compatibility only: the smoke adapter scored 0% strict schema validity on the fixed test split and is not eligible for router use or release.
 
 A subsequent authorized 100-step pilot trained on 995 generated examples after correcting the prompt to include the trusted source hash. It reached 40% strict schema validity, 40% IR-validator pass rate, and 20% execution correctness on the five fixed holdouts. The only deterministic-fallback holdout remained unsolved, so the pilot checkpoint was not eligible for router use or GGUF release.
 
-The first expanded run was invalidated after a semantic audit found factorial 6 in both generated training data and a fixed holdout under different group IDs. The corrected fallback-v2 corpus excludes that semantic holdout and adds a regression assertion. Its leak-free run trained for 300 optimizer steps on the 1,699/221 train/validation split. On 21 fixed holdouts, all predictions passed strict schema and IR validation, 18 executed correctly (85.71%), and all 17 cases that actually require AI fallback—including the excluded factorial-6 test—executed correctly. Three deterministic-supported cross-task cases remained semantically wrong. The selected adapter was merged locally into safetensors and the merged model reproduced the same schema, validator, and execution rates. It remains a candidate for GGUF/llama.cpp acceptance, not a deployed or production-accepted Mini tier.
+The first expanded run was invalidated after a semantic audit found factorial 6 in both generated training data and a fixed holdout under different group IDs. The corrected fallback-v2 corpus excludes that semantic holdout and adds a regression assertion. Its leak-free run trained for 300 optimizer steps on the 1,699/221 train/validation split. On 21 fixed holdouts, all predictions passed strict schema and IR validation, 18 executed correctly (85.71%), and all 17 cases that actually require AI fallback—including the excluded factorial-6 test—executed correctly. Three deterministic-supported cross-task cases remained semantically wrong. The selected adapter was merged locally into safetensors and the merged model reproduced the same schema, validator, and execution rates. F16 GGUF preserved those rates through the pinned Vulkan llama.cpp server. Q4_K_M reduced the model to 397,807,744 bytes and 1.51 seconds average latency while retaining 17/17 AI-required execution correctness. A real Mini-router factorial-6 smoke invoked AI and printed `720`; endpoint configuration remains opt-in, and this is not a claim that Mini replaces deterministic compilation.
 
 ## Artifact policy
 

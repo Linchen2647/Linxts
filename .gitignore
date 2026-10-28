@@ -11,6 +11,7 @@
 /training/models/
 /training/runs/
 /training/cache/
+/training/tools/
 /.cache/
 *.tmp
 *.bak

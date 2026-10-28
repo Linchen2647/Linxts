@@ -54,6 +54,50 @@ class TrainingScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("downloads are disabled", result.stderr)
 
+    def test_gguf_converter_requires_local_pinned_source(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                str(SCRIPTS / "convert_gguf.py"),
+                "--llama-source",
+                "/definitely/missing/llama.cpp",
+                "--expected-commit",
+                "deadbeef",
+                "--model",
+                "/definitely/missing/model",
+                "--output",
+                "/definitely/missing/model.gguf",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("local llama.cpp Git checkout", result.stderr)
+
+    def test_llama_evaluator_rejects_non_loopback_url(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                str(SCRIPTS / "evaluate_llama_cpp.py"),
+                "--url",
+                "https://example.com",
+                "--dataset",
+                "/definitely/missing/dataset",
+                "--output",
+                "/definitely/missing/output.jsonl",
+                "--model-id",
+                "test-model",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("loopback HTTP", result.stderr)
+
     def test_merger_refuses_missing_local_inputs(self) -> None:
         result = subprocess.run(
             [

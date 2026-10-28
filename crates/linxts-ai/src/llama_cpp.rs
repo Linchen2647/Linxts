@@ -2,6 +2,7 @@ use crate::protocol::{CandidateEnvelope, candidate_json_schema};
 use crate::provider::{
     AiProvider, AiRequest, CancellationToken, InferenceBudget, ProviderError, ProviderHealth,
 };
+use serde::Serialize;
 use serde_json::Value;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
@@ -74,11 +75,26 @@ impl HttpEndpoint {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PromptProfile {
+    General,
+    Mini,
+}
+
 #[derive(Debug, Clone)]
 pub struct LlamaCppProvider {
     id: String,
     model_id: String,
     endpoint: HttpEndpoint,
+    prompt_profile: PromptProfile,
+}
+
+#[derive(Serialize)]
+struct MiniInput<'a> {
+    task: &'static str,
+    source: &'a str,
+    source_hash: &'a str,
+    diagnostics: &'a [String],
 }
 
 impl LlamaCppProvider {
@@ -98,6 +114,26 @@ impl LlamaCppProvider {
             id: id.into(),
             model_id: model_id.into(),
             endpoint,
+            prompt_profile: PromptProfile::General,
+        })
+    }
+
+    pub fn new_mini(
+        id: impl Into<String>,
+        model_id: impl Into<String>,
+        endpoint: &str,
+    ) -> Result<Self, ProviderError> {
+        let endpoint = HttpEndpoint::parse(endpoint)?;
+        if !endpoint.is_loopback() {
+            return Err(ProviderError::Unavailable(
+                "non-loopback llama.cpp endpoint rejected for Linxts-Mini".to_owned(),
+            ));
+        }
+        Ok(Self {
+            id: id.into(),
+            model_id: model_id.into(),
+            endpoint,
+            prompt_profile: PromptProfile::Mini,
         })
     }
 
@@ -110,6 +146,7 @@ impl LlamaCppProvider {
             id: id.into(),
             model_id: model_id.into(),
             endpoint: HttpEndpoint::parse(endpoint)?,
+            prompt_profile: PromptProfile::General,
         })
     }
 
@@ -118,17 +155,36 @@ impl LlamaCppProvider {
         request: &AiRequest,
         budget: &InferenceBudget,
     ) -> Result<Vec<u8>, ProviderError> {
-        let input = serde_json::json!({
-            "source": request.source,
-            "source_hash": request.source_hash,
-            "language_hint": request.language_hint,
-            "parser_diagnostics": request.diagnostics,
-        });
-        let prompt = format!(
-            "You are the Linxts compiler fallback. Return exactly one JSON object matching the supplied schema. Convert the source intent into the current Linxts IR schema. Preserve source_hash exactly. Do not emit markdown, prose, external effects, filesystem operations, process execution, networking, imports, FFI, or unresolved error nodes. If intent is unsafe or cannot be represented, do not fabricate capabilities.\nINPUT JSON:\n{}",
-            serde_json::to_string(&input)
-                .map_err(|error| ProviderError::InvalidJson(error.to_string()))?
-        );
+        let (prompt, schema) = match self.prompt_profile {
+            PromptProfile::General => {
+                let input = serde_json::json!({
+                    "source": request.source,
+                    "source_hash": request.source_hash,
+                    "language_hint": request.language_hint,
+                    "parser_diagnostics": request.diagnostics,
+                });
+                let prompt = format!(
+                    "You are the Linxts compiler fallback. Return exactly one JSON object matching the supplied schema. Convert the source intent into the current Linxts IR schema. Preserve source_hash exactly. Do not emit markdown, prose, external effects, filesystem operations, process execution, networking, imports, FFI, or unresolved error nodes. If intent is unsafe or cannot be represented, do not fabricate capabilities.\nINPUT JSON:\n{}",
+                    serde_json::to_string(&input)
+                        .map_err(|error| ProviderError::InvalidJson(error.to_string()))?
+                );
+                (prompt, Some(candidate_json_schema()))
+            }
+            PromptProfile::Mini => {
+                let input = MiniInput {
+                    task: mini_task(request),
+                    source: &request.source,
+                    source_hash: &request.source_hash,
+                    diagnostics: &request.diagnostics,
+                };
+                let prompt = format!(
+                    "You are Linxts-Mini, the first Linxts compiler fallback. Return exactly one JSON CandidateEnvelope matching the current schema. Never emit markdown or unvalidated code.\nINPUT JSON:\n{}\nOUTPUT JSON:\n",
+                    serde_json::to_string(&input)
+                        .map_err(|error| ProviderError::InvalidJson(error.to_string()))?
+                );
+                (prompt, None)
+            }
+        };
         let context_byte_budget = (budget.context_tokens as usize).saturating_mul(4);
         if prompt.len() > context_byte_budget {
             return Err(ProviderError::PromptTooLarge {
@@ -136,14 +192,29 @@ impl LlamaCppProvider {
                 limit: context_byte_budget,
             });
         }
-        serde_json::to_vec(&serde_json::json!({
+        let mut body = serde_json::json!({
             "prompt": prompt,
             "n_predict": budget.output_tokens,
             "temperature": 0.0,
             "cache_prompt": true,
-            "json_schema": candidate_json_schema(),
-        }))
-        .map_err(|error| ProviderError::InvalidJson(error.to_string()))
+        });
+        if let Some(schema) = schema {
+            body["json_schema"] = schema;
+        }
+        serde_json::to_vec(&body).map_err(|error| ProviderError::InvalidJson(error.to_string()))
+    }
+}
+
+fn mini_task(request: &AiRequest) -> &'static str {
+    let hint = request.language_hint.as_deref().unwrap_or_default();
+    if hint.to_ascii_lowercase().contains("mixed") {
+        "mixed_language_understanding"
+    } else if hint.to_ascii_lowercase().contains("natural") {
+        "natural_language_to_ir"
+    } else if !request.diagnostics.is_empty() {
+        "syntax_repair"
+    } else {
+        "structured_ir_generation"
     }
 }
 
@@ -403,6 +474,24 @@ mod tests {
         let endpoint = HttpEndpoint::parse("http://127.0.0.1").expect("endpoint");
         assert_eq!(endpoint.port, 8080);
         assert!(endpoint.is_loopback());
+    }
+
+    #[test]
+    fn mini_profile_matches_training_prompt_without_grammar() {
+        let provider = LlamaCppProvider::new_mini("mini", "linxts-mini", "http://127.0.0.1:8079")
+            .expect("mini provider");
+        let body: Value = serde_json::from_slice(
+            &provider
+                .completion_body(&ai_request(), &InferenceBudget::default())
+                .expect("completion body"),
+        )
+        .expect("body JSON");
+        assert!(body.get("json_schema").is_none());
+        let prompt = body["prompt"].as_str().expect("prompt");
+        assert!(prompt.starts_with("You are Linxts-Mini, the first Linxts compiler fallback."));
+        assert!(prompt.contains("\"task\":\"natural_language_to_ir\""));
+        assert!(prompt.contains("\"diagnostics\":[\"LXT-120\"]"));
+        assert!(prompt.ends_with("\nOUTPUT JSON:\n"));
     }
 
     #[test]
