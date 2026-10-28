@@ -73,6 +73,7 @@ impl RepairEngine {
             passes += 1;
             let before = text.clone();
             repair_known_typos(source, source_offset, &mut text, &mut records, options);
+            repair_misplaced_numeric_quote(source, source_offset, &mut text, &mut records, options);
             repair_delimiters(source, source_offset, &mut text, &mut records, options);
             if text == before {
                 break;
@@ -120,6 +121,67 @@ fn repair_known_typos(
                 SemanticRisk::Medium,
             );
         }
+    }
+}
+
+fn repair_misplaced_numeric_quote(
+    source: SourceId,
+    source_offset: usize,
+    text: &mut String,
+    records: &mut Vec<RepairRecord>,
+    options: RepairOptions,
+) {
+    if options.strict {
+        return;
+    }
+    let mut search_start = 0;
+    while let Some(relative) = text[search_start..].find("\"\"") {
+        let first_quote = search_start + relative;
+        let line_start = text[..first_quote]
+            .rfind('\n')
+            .map_or(0, |position| position + 1);
+        let prefix = text[line_start..first_quote].trim_end();
+        if !["print(", "println(", "print!(", "println!("]
+            .iter()
+            .any(|call| prefix.ends_with(call))
+        {
+            search_start = first_quote + 2;
+            continue;
+        }
+        let digits_start = first_quote + 2;
+        let digits_end = text[digits_start..]
+            .char_indices()
+            .take_while(|(_, character)| character.is_ascii_digit())
+            .last()
+            .map_or(digits_start, |(offset, character)| {
+                digits_start + offset + character.len_utf8()
+            });
+        if digits_end == digits_start
+            || text[digits_end..]
+                .chars()
+                .find(|character| !character.is_whitespace())
+                != Some(')')
+        {
+            search_start = first_quote + 2;
+            continue;
+        }
+        let original = text[first_quote + 1..digits_end].to_owned();
+        let repaired = format!("{}\"", &text[digits_start..digits_end]);
+        text.replace_range(first_quote + 1..digits_end, &repaired);
+        push_record(
+            records,
+            Span::new(
+                source,
+                source_offset + first_quote + 1,
+                source_offset + digits_end,
+            ),
+            original,
+            repaired,
+            RepairType::MissingDelimiter,
+            "moved a duplicated output-string quote after its numeric content",
+            SemanticRisk::Medium,
+        );
+        search_start = first_quote + 1;
     }
 }
 
@@ -298,6 +360,19 @@ mod tests {
         assert_eq!(result.records.len(), 1);
         assert_eq!(result.records[0].repaired_text, "\"");
         assert!(result.text.contains("1\",{}\")"));
+    }
+
+    #[test]
+    fn repairs_misplaced_numeric_output_quote() {
+        let result = RepairEngine::repair(
+            SourceId(0),
+            0,
+            "fn rust(){\n    print(\"\"666)\n}\n",
+            RepairOptions::default(),
+        );
+        assert_eq!(result.records.len(), 1);
+        assert!(result.text.contains("print(\"666\")"));
+        assert_eq!(result.records[0].semantic_risk, SemanticRisk::Medium);
     }
 
     #[test]

@@ -35,6 +35,12 @@ fn language_hints_and_repair_have_expected_output() {
 }
 
 #[test]
+fn simplified_chinese_mixed_sample_repairs_and_executes() {
+    let source = "^这是Python\nPRINT 9\n^这是C语言\nint main(void) {\n    println!(5)\n    return 0\n}\n^这是Rust\nfn rust(){\n    print(\"\"666)\n}\n^自然语言\n计算1~6的连乘，并输出\n";
+    assert_eq!(execute(source), "9\n720\n5\n");
+}
+
+#[test]
 fn natural_sum_has_expected_output() {
     assert_eq!(execute("幫我算出1到100的總和\n"), "5050\n");
 }

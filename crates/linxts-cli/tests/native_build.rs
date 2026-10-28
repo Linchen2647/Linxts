@@ -46,6 +46,54 @@ mod linux {
     }
 
     #[test]
+    fn builds_and_runs_simplified_chinese_mixed_sample() {
+        if Command::new("cc").arg("--version").output().is_err() {
+            eprintln!("skipping native integration test: cc unavailable");
+            return;
+        }
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "linxts-native-user-mixed-test-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture directory");
+        let source = root.join("mixed-user.lx");
+        let executable = root.join("mixed-user");
+        std::fs::write(
+            &source,
+            "^这是Python\nPRINT 9\n^这是C语言\nint main(void) {\n    println!(5)\n    return 0\n}\n^这是Rust\nfn rust(){\n    print(\"\"666)\n}\n^自然语言\n计算1~6的连乘，并输出\n",
+        )
+        .expect("write fixture");
+
+        let build = Command::new(env!("CARGO_BIN_EXE_linxts"))
+            .arg("build")
+            .arg(&source)
+            .arg("--no-ai")
+            .arg("--no-cache")
+            .arg("--output")
+            .arg(&executable)
+            .output()
+            .expect("run native build");
+        assert!(
+            build.status.success(),
+            "stderr: {}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        let bytes = std::fs::read(&executable).expect("read executable");
+        assert_eq!(&bytes[..4], b"\x7fELF");
+
+        let run = Command::new(&executable)
+            .output()
+            .expect("run native executable");
+        assert!(run.status.success());
+        assert_eq!(String::from_utf8_lossy(&run.stdout), "9\n720\n5\n");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn builds_cross_language_functions_loops_and_formats() {
         if Command::new("cc").arg("--version").output().is_err() {
             eprintln!("skipping native integration test: cc unavailable");

@@ -14,6 +14,7 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Unterminated-string repair reuses existing structural closers to avoid cascading over-repair.
 - Linxts Unified IR v0.2 with validated cross-language format expressions, tree-walking VM support, and native backend lowering.
 - Python indentation suites and one-, two-, or three-argument `for ... in range(...)` loops with positive or negative literal steps.
+- Deterministic Traditional/Simplified Chinese factorial intents and aggressive repair for misplaced numeric output-string quotes.
 - Mixed-language top-level variables and a deterministic Chinese intent subset.
 - VM and native integration coverage combining shared variables, cross-language function calls, loops, and formatting.
 - Versioned AI candidate protocol, recursive IR JSON Schema, and safety validation.
@@ -23,6 +24,8 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - A compiler-validated 1,121-sample pilot corpus and authorized 100-step LoRA run, improving held-out schema/validator validity to 40% and execution correctness to 20% without promoting the checkpoint.
 - A 1,941-sample fallback-focused corpus with paraphrase-group split isolation, 16 new AI-required holdouts, strict sequence-length checks that reject label truncation, semantic holdout-leak regression coverage, and a leak-free 300-step LoRA run reaching 100% schema/validator validity and 85.71% execution correctness over 21 fixed tests.
 - A local-only, safe PEFT adapter merger with hashed safetensors output and merged-model benchmark verification.
+- Pinned llama.cpp F16 and Q4_K_M GGUF conversion, Vulkan/RADV evaluation, and a real Mini-tier factorial fallback smoke.
+- A Mini-specific llama.cpp prompt profile aligned with training data; strict candidate and IR validation remains mandatory after unconstrained generation.
 - Inference timeout, retry, cancellation, size/context/token, and authorization limits.
 - Per-attempt AI route diagnostics plus a hash-pinned, repeatable real 3B → 7B acceptance runner kept separate from mock CI coverage.
 - Versioned, atomic, size-bounded compilation cache with IR revalidation.

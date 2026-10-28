@@ -124,11 +124,11 @@ The current VM prints `10` and `50` for the mixed example. Integration coverage 
 | C `int`/`void` functions, integer declarations, `printf`, and return | Implemented subset |
 | Brace-delimited `if` and `while` | Implemented subset |
 | Functions, calls, parameters, return | Implemented subset |
-| Missing quote/parenthesis/brace repair and selected typo repair | Implemented |
-| Chinese sum/even-range and simple variable arithmetic intents | Deterministic subset |
+| Missing quote/parenthesis/brace repair, misplaced numeric output-string quote repair, and selected typo repair | Implemented |
+| Chinese sum/even-range/factorial and simple variable arithmetic intents | Deterministic subset |
 | Python indentation and `for ... in range(...)` | Implemented subset; ranges lower to validated loop IR |
 | Full Python/JavaScript/Rust/C semantics | Not implemented |
-| llama.cpp structured fallback with configurable Mini → 3B → 7B → larger-local escalation | Router implemented; experimental Mini pilot is not yet accepted for use |
+| llama.cpp structured fallback with configurable Mini → 3B → 7B → larger-local escalation | Router implemented; the Q4_K_M Mini candidate passed the fixed AI-required holdouts and local Vulkan smoke, with endpoint configuration remaining opt-in |
 | AI timeout, retry, cancellation token, token/context budget, health check | Implemented |
 | Online model providers | Not implemented; router authorization gate exists |
 | Compilation cache | Implemented for successful validated compilations; native artifacts not cached yet |
@@ -162,7 +162,9 @@ The client uses llama.cpp's native `/health` and `/completion` endpoints. CLI co
 
 Every completion must contain a strict versioned candidate envelope. Source hash, schema version, side effects, scopes, calls, error nodes, and the entire IR are validated before the compiler replaces deterministic parse errors. Invalid JSON or IR escalates to the next configured local tier. No online provider is implemented or contacted.
 
-CI uses controlled mock HTTP providers only. Real-model acceptance has not yet been executed on this machine; [`scripts/accept-real-model-escalation.sh`](scripts/accept-real-model-escalation.sh) and the [acceptance specification](docs/real-model-acceptance.md) define the separate, hash-pinned 3B → 7B procedure without downloading models.
+The Mini tier uses the same prompt contract as its validated training corpus and does not apply llama.cpp generation grammar. The recursive grammar produced schema-shaped but semantically invalid Mini output during real acceptance; unconstrained Mini generation followed by the unchanged strict candidate and IR validators passed the AI-required holdouts. The existing 3B/7B/larger-local tiers retain schema-guided generation.
+
+CI uses controlled mock HTTP providers only. Real-model **3B → 7B** acceptance has not yet been executed on this machine; [`scripts/accept-real-model-escalation.sh`](scripts/accept-real-model-escalation.sh) and the [acceptance specification](docs/real-model-acceptance.md) define that separate, hash-pinned procedure without downloading models. Linxts-Mini's pinned Q4_K_M Vulkan acceptance is recorded independently in the training experiment manifest.
 
 ## Native compilation
 

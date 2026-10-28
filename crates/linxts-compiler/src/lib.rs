@@ -279,6 +279,23 @@ fn parse_natural(segment: &Segment, declared: &mut HashSet<String>) -> Option<Bl
         return Some(even_loop(span, numbers[0], numbers[1], index_name));
     }
 
+    if text.contains("連乘")
+        || text.contains("连乘")
+        || text.contains("階乘")
+        || text.contains("阶乘")
+    {
+        let (start, end) = match numbers.as_slice() {
+            [end] => (1, *end),
+            [start, end, ..] => (*start, *end),
+            [] => return None,
+        };
+        let product_name = unique_internal_name(declared, "__linxts_product");
+        let index_name = unique_internal_name(declared, "__linxts_i");
+        declared.insert(product_name.clone());
+        declared.insert(index_name.clone());
+        return Some(product_loop(span, start, end, product_name, index_name));
+    }
+
     if let Some(operation) = natural_variable_operation(text, span, declared) {
         return Some(operation);
     }
@@ -320,6 +337,47 @@ fn sum_loop(span: Span, start: i64, end: i64, sum: String, index: String) -> Blo
                 span,
             ),
             Statement::new(StatementKind::Print(variable_expression(&sum, span)), span),
+        ],
+    }
+}
+
+fn product_loop(span: Span, start: i64, end: i64, product: String, index: String) -> Block {
+    Block {
+        statements: vec![
+            variable(&product, 1, span),
+            variable(&index, start, span),
+            Statement::new(
+                StatementKind::Loop {
+                    condition: binary(
+                        variable_expression(&index, span),
+                        BinaryOperator::LessEqual,
+                        Expression::integer(end, span),
+                        span,
+                    ),
+                    body: Block {
+                        statements: vec![
+                            Statement::new(
+                                StatementKind::Assignment {
+                                    name: product.clone(),
+                                    value: binary(
+                                        variable_expression(&product, span),
+                                        BinaryOperator::Multiply,
+                                        variable_expression(&index, span),
+                                        span,
+                                    ),
+                                },
+                                span,
+                            ),
+                            increment(&index, span),
+                        ],
+                    },
+                },
+                span,
+            ),
+            Statement::new(
+                StatementKind::Print(variable_expression(&product, span)),
+                span,
+            ),
         ],
     }
 }
@@ -521,6 +579,13 @@ mod tests {
         let result = compile(
             "^python\nx = 10\n^javascript\nconsole.log(x)\n^自然語言\n把 x 乘以 5，然後顯示結果\n",
         );
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert_eq!(result.module.body.statements.len(), 4);
+    }
+
+    #[test]
+    fn compiles_simplified_chinese_natural_product() {
+        let result = compile("^自然语言\n计算1~6的连乘，并输出\n");
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
         assert_eq!(result.module.body.statements.len(), 4);
     }
