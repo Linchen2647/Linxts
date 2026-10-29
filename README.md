@@ -111,6 +111,20 @@ console.log(x)
 
 The current VM prints `10` and `50` for the mixed example. Integration coverage also exercises a Python-defined function called from JavaScript, a Rust-style loop over shared values, and formatted JavaScript/Rust/C output through both the VM and native bootstrap backend.
 
+A complete Simplified Chinese mixed example with aggressive repair and deterministic factorial lowering is available at [`examples/mixed-simplified.lx`](examples/mixed-simplified.lx):
+
+```bash
+cargo run -p linxts-cli --offline -- run examples/mixed-simplified.lx --no-ai
+```
+
+```text
+9
+720
+5
+```
+
+The Rust `rust()` function is repaired and compiled but is not executed because the source defines it without calling it. The C `main()` function runs after top-level Python and natural-language statements.
+
 ## Supported subset
 
 | Capability | Status |

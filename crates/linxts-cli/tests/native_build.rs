@@ -64,7 +64,10 @@ mod linux {
         let executable = root.join("mixed-user");
         std::fs::write(
             &source,
-            "^这是Python\nPRINT 9\n^这是C语言\nint main(void) {\n    println!(5)\n    return 0\n}\n^这是Rust\nfn rust(){\n    print(\"\"666)\n}\n^自然语言\n计算1~6的连乘，并输出\n",
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../examples/mixed-simplified.lx"
+            )),
         )
         .expect("write fixture");
 
