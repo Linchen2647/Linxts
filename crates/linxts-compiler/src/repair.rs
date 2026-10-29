@@ -73,6 +73,7 @@ impl RepairEngine {
             passes += 1;
             let before = text.clone();
             repair_known_typos(source, source_offset, &mut text, &mut records, options);
+            repair_misplaced_numeric_quote(source, source_offset, &mut text, &mut records, options);
             repair_delimiters(source, source_offset, &mut text, &mut records, options);
             if text == before {
                 break;
@@ -123,6 +124,67 @@ fn repair_known_typos(
     }
 }
 
+fn repair_misplaced_numeric_quote(
+    source: SourceId,
+    source_offset: usize,
+    text: &mut String,
+    records: &mut Vec<RepairRecord>,
+    options: RepairOptions,
+) {
+    if options.strict {
+        return;
+    }
+    let mut search_start = 0;
+    while let Some(relative) = text[search_start..].find("\"\"") {
+        let first_quote = search_start + relative;
+        let line_start = text[..first_quote]
+            .rfind('\n')
+            .map_or(0, |position| position + 1);
+        let prefix = text[line_start..first_quote].trim_end();
+        if !["print(", "println(", "print!(", "println!("]
+            .iter()
+            .any(|call| prefix.ends_with(call))
+        {
+            search_start = first_quote + 2;
+            continue;
+        }
+        let digits_start = first_quote + 2;
+        let digits_end = text[digits_start..]
+            .char_indices()
+            .take_while(|(_, character)| character.is_ascii_digit())
+            .last()
+            .map_or(digits_start, |(offset, character)| {
+                digits_start + offset + character.len_utf8()
+            });
+        if digits_end == digits_start
+            || text[digits_end..]
+                .chars()
+                .find(|character| !character.is_whitespace())
+                != Some(')')
+        {
+            search_start = first_quote + 2;
+            continue;
+        }
+        let original = text[first_quote + 1..digits_end].to_owned();
+        let repaired = format!("{}\"", &text[digits_start..digits_end]);
+        text.replace_range(first_quote + 1..digits_end, &repaired);
+        push_record(
+            records,
+            Span::new(
+                source,
+                source_offset + first_quote + 1,
+                source_offset + digits_end,
+            ),
+            original,
+            repaired,
+            RepairType::MissingDelimiter,
+            "moved a duplicated output-string quote after its numeric content",
+            SemanticRisk::Medium,
+        );
+        search_start = first_quote + 1;
+    }
+}
+
 fn repair_delimiters(
     source: SourceId,
     source_offset: usize,
@@ -133,9 +195,11 @@ fn repair_delimiters(
     let mut stack = Vec::new();
     let mut single_quote = false;
     let mut double_quote = false;
+    let mut single_quote_start = None;
+    let mut double_quote_start = None;
     let mut escaped = false;
 
-    for character in text.chars() {
+    for (index, character) in text.char_indices() {
         if escaped {
             escaped = false;
             continue;
@@ -145,8 +209,14 @@ fn repair_delimiters(
             continue;
         }
         match character {
-            '\'' if !double_quote => single_quote = !single_quote,
-            '"' if !single_quote => double_quote = !double_quote,
+            '\'' if !double_quote => {
+                single_quote = !single_quote;
+                single_quote_start = single_quote.then_some(index);
+            }
+            '"' if !single_quote => {
+                double_quote = !double_quote;
+                double_quote_start = double_quote.then_some(index);
+            }
             '(' | '[' | '{' if !single_quote && !double_quote => stack.push(character),
             ')' | ']' | '}'
                 if !single_quote
@@ -165,8 +235,24 @@ fn repair_delimiters(
         if options.strict {
             return;
         }
-        let quote = if single_quote { "'" } else { "\"" };
-        let insertion = trailing_content_end(text);
+        let (quote, quote_start) = if single_quote {
+            ("'", single_quote_start.expect("open quote has a start"))
+        } else {
+            ("\"", double_quote_start.expect("open quote has a start"))
+        };
+        let insertion = stack.last().map_or_else(
+            || trailing_content_end(text),
+            |opening| {
+                let expected = matching(*opening);
+                let search_start = quote_start + quote.len();
+                text[search_start..]
+                    .char_indices()
+                    .find_map(|(relative, character)| {
+                        (character == expected).then_some(search_start + relative)
+                    })
+                    .unwrap_or_else(|| trailing_content_end(text))
+            },
+        );
         text.insert_str(insertion, quote);
         push_record(
             records,
@@ -177,6 +263,7 @@ fn repair_delimiters(
             "closed an unterminated string literal",
             SemanticRisk::Medium,
         );
+        return;
     }
 
     if stack.is_empty() {
@@ -260,6 +347,32 @@ mod tests {
         assert_eq!(result.text, "console.log(\"Hello\")");
         assert_eq!(result.records.len(), 1);
         assert_eq!(result.records[0].semantic_risk, SemanticRisk::Low);
+    }
+
+    #[test]
+    fn quote_repair_reuses_existing_structural_closers() {
+        let result = RepairEngine::repair(
+            SourceId(0),
+            0,
+            "fn main() {\nprint!(1\",{})\n}\n",
+            RepairOptions::default(),
+        );
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].repaired_text, "\"");
+        assert!(result.text.contains("1\",{}\")"));
+    }
+
+    #[test]
+    fn repairs_misplaced_numeric_output_quote() {
+        let result = RepairEngine::repair(
+            SourceId(0),
+            0,
+            "fn rust(){\n    print(\"\"666)\n}\n",
+            RepairOptions::default(),
+        );
+        assert_eq!(result.records.len(), 1);
+        assert!(result.text.contains("print(\"666\")"));
+        assert_eq!(result.records[0].semantic_risk, SemanticRisk::Medium);
     }
 
     #[test]

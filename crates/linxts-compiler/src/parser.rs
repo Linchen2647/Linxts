@@ -1,7 +1,7 @@
 use crate::lexer::{Token, TokenKind, lex};
 use linxts_ir::{
-    BinaryOperator, Block, Expression, ExpressionKind, Function, Parameter, Statement,
-    StatementKind, Type, UnaryOperator,
+    BinaryOperator, Block, Expression, ExpressionKind, FormatSegment, Function, Parameter,
+    Statement, StatementKind, Type, UnaryOperator,
 };
 use linxts_source::{SourceId, Span};
 use std::collections::HashSet;
@@ -29,12 +29,19 @@ impl ParsedUnit {
     }
 }
 
+enum BlockEnd {
+    Eof,
+    Brace,
+    Dedent,
+}
+
 pub struct Parser<'a> {
     tokens: Vec<Token>,
     cursor: usize,
     diagnostics: Vec<ParseDiagnostic>,
     functions: Vec<Function>,
     declared: &'a mut HashSet<String>,
+    indentation_sensitive: bool,
     depth: usize,
 }
 
@@ -45,17 +52,19 @@ impl<'a> Parser<'a> {
         base: usize,
         input: &str,
         declared: &'a mut HashSet<String>,
+        indentation_sensitive: bool,
     ) -> ParsedUnit {
-        let tokens = lex(source, base, input);
+        let tokens = lex(source, base, input, indentation_sensitive);
         let mut parser = Self {
             tokens,
             cursor: 0,
             diagnostics: Vec::new(),
             functions: Vec::new(),
             declared,
+            indentation_sensitive,
             depth: 0,
         };
-        let block = parser.parse_statements(false);
+        let block = parser.parse_statements(BlockEnd::Eof);
         ParsedUnit {
             block,
             functions: parser.functions,
@@ -63,12 +72,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_statements(&mut self, stop_at_brace: bool) -> Block {
+    fn parse_statements(&mut self, end: BlockEnd) -> Block {
         let mut statements = Vec::new();
-        let mut closed = !stop_at_brace;
+        let mut closed = matches!(end, BlockEnd::Eof);
         self.skip_separators();
         while !self.at(&TokenKind::Eof) {
-            if stop_at_brace && self.at(&TokenKind::RightBrace) {
+            let reached_end = match end {
+                BlockEnd::Eof => false,
+                BlockEnd::Brace => self.at(&TokenKind::RightBrace),
+                BlockEnd::Dedent => self.at(&TokenKind::Dedent),
+            };
+            if reached_end {
                 self.advance();
                 closed = true;
                 break;
@@ -79,10 +93,14 @@ impl<'a> Parser<'a> {
                 self.skip_separators();
                 continue;
             }
-            let before = self.cursor;
-            if let Some(statement) = self.parse_statement() {
-                statements.push(statement);
+            if self.at(&TokenKind::Indent) || self.at(&TokenKind::Dedent) {
+                self.error_here("LXT-122", "unexpected indentation boundary");
+                self.advance();
+                self.skip_separators();
+                continue;
             }
+            let before = self.cursor;
+            statements.extend(self.parse_next_statements());
             if self.cursor == before {
                 self.error_here("LXT-102", "parser made no progress");
                 self.advance();
@@ -90,9 +108,22 @@ impl<'a> Parser<'a> {
             self.skip_separators();
         }
         if !closed {
-            self.error_here("LXT-103", "missing closing brace");
+            let (code, message) = match end {
+                BlockEnd::Brace => ("LXT-103", "missing closing brace"),
+                BlockEnd::Dedent => ("LXT-123", "missing dedent at end of block"),
+                BlockEnd::Eof => unreachable!("top-level block is always closed"),
+            };
+            self.error_here(code, message);
         }
         Block { statements }
+    }
+
+    fn parse_next_statements(&mut self) -> Vec<Statement> {
+        if self.check_identifier("for") {
+            self.parse_for_range()
+        } else {
+            self.parse_statement().into_iter().collect()
+        }
     }
 
     fn parse_statement(&mut self) -> Option<Statement> {
@@ -100,6 +131,13 @@ impl<'a> Parser<'a> {
             self.error_here("LXT-105", "parser nesting limit exceeded");
             self.synchronize();
             return None;
+        }
+        if self.is_c_function_start() {
+            self.parse_c_function();
+            return None;
+        }
+        if self.is_c_declaration_start() {
+            return Some(self.parse_c_declaration());
         }
         if self.check_identifier("fn")
             || self.check_identifier("def")
@@ -206,6 +244,99 @@ impl<'a> Parser<'a> {
         });
     }
 
+    fn parse_c_function(&mut self) {
+        let return_token = self.advance().clone();
+        let return_type = match &return_token.kind {
+            TokenKind::Identifier(name) if name.eq_ignore_ascii_case("void") => Type::Unit,
+            _ => Type::Integer,
+        };
+        let Some((name, name_span)) = self.take_identifier() else {
+            self.error_here("LXT-107", "expected C function name");
+            self.synchronize();
+            return;
+        };
+        if !self.consume(&TokenKind::LeftParen) {
+            self.error_here("LXT-108", "expected `(` after C function name");
+        }
+        let mut parameters = Vec::new();
+        if self.check_identifier("void") {
+            self.advance();
+        } else {
+            while !self.at(&TokenKind::RightParen) && !self.at(&TokenKind::Eof) {
+                if self.check_identifier("int") || self.check_identifier("char") {
+                    self.advance();
+                    self.consume(&TokenKind::Star);
+                }
+                let Some((parameter, span)) = self.take_identifier() else {
+                    self.error_here("LXT-109", "expected C parameter name");
+                    self.advance();
+                    continue;
+                };
+                parameters.push(Parameter {
+                    name: parameter,
+                    ty: Type::Unknown,
+                    span,
+                });
+                if !self.consume(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        if !self.consume(&TokenKind::RightParen) {
+            self.error_here("LXT-110", "expected `)` after C parameters");
+        }
+
+        let globals = self.declared.clone();
+        for parameter in &parameters {
+            self.declared.insert(parameter.name.clone());
+        }
+        let body = self.parse_required_block();
+        *self.declared = globals;
+        let end = body
+            .statements
+            .last()
+            .map_or(name_span, |statement| statement.span);
+        self.functions.push(Function {
+            name,
+            parameters,
+            body,
+            return_type,
+            span: merge(return_token.span, end),
+        });
+    }
+
+    fn parse_c_declaration(&mut self) -> Statement {
+        let start = self.advance().span;
+        self.consume(&TokenKind::Star);
+        let Some((name, name_span)) = self.take_identifier() else {
+            self.error_here("LXT-111", "expected C variable name");
+            return Statement::new(
+                StatementKind::Expression(Expression::new(
+                    ExpressionKind::Error {
+                        message: "missing C variable name".to_owned(),
+                    },
+                    start,
+                )),
+                start,
+            );
+        };
+        let value = if self.consume(&TokenKind::Equal) {
+            self.parse_expression(0)
+        } else {
+            Expression::integer(0, name_span)
+        };
+        self.declared.insert(name.clone());
+        let span = merge(start, value.span);
+        Statement::new(
+            StatementKind::Variable {
+                name,
+                value,
+                mutable: true,
+            },
+            span,
+        )
+    }
+
     fn parse_conditional(&mut self) -> Statement {
         let start = self.advance().span;
         let condition = self.parse_expression(0);
@@ -241,6 +372,151 @@ impl<'a> Parser<'a> {
             .last()
             .map_or(condition.span, |statement| statement.span);
         Statement::new(StatementKind::Loop { condition, body }, merge(start, end))
+    }
+
+    fn parse_for_range(&mut self) -> Vec<Statement> {
+        let start = self.advance().span;
+        let Some((name, name_span)) = self.take_identifier() else {
+            self.error_here("LXT-124", "expected loop variable after `for`");
+            self.synchronize();
+            return Vec::new();
+        };
+        if !self.consume_identifier("in") {
+            self.error_here("LXT-125", "expected `in` after loop variable");
+        }
+        if !self.consume_identifier("range") {
+            self.error_here("LXT-126", "only `range(...)` for-loops are supported");
+        }
+        if !self.consume(&TokenKind::LeftParen) {
+            self.error_here("LXT-127", "expected `(` after `range`");
+        }
+
+        let mut arguments = Vec::new();
+        while !self.at(&TokenKind::RightParen) && !self.at_separator() && !self.at(&TokenKind::Eof)
+        {
+            arguments.push(self.parse_expression(0));
+            if !self.consume(&TokenKind::Comma) {
+                break;
+            }
+        }
+        if !self.consume(&TokenKind::RightParen) {
+            self.error_here("LXT-128", "expected `)` after range arguments");
+        }
+
+        let arguments_valid = (1..=3).contains(&arguments.len());
+        if !arguments_valid {
+            self.error_here("LXT-129", "range expects one, two, or three arguments");
+        }
+        let fallback = Expression::integer(0, name_span);
+        let (initial, limit, step) = match arguments.as_slice() {
+            [limit] => (
+                Expression::integer(0, name_span),
+                limit.clone(),
+                Expression::integer(1, name_span),
+            ),
+            [initial, limit] => (
+                initial.clone(),
+                limit.clone(),
+                Expression::integer(1, name_span),
+            ),
+            [initial, limit, step] => (initial.clone(), limit.clone(), step.clone()),
+            _ => (
+                fallback.clone(),
+                fallback.clone(),
+                Expression::integer(1, name_span),
+            ),
+        };
+        let step_value = match &step.kind {
+            ExpressionKind::Literal(linxts_ir::Literal::Integer(value)) if *value != 0 => *value,
+            ExpressionKind::Unary {
+                operator: UnaryOperator::Negate,
+                operand,
+            } => match &operand.kind {
+                ExpressionKind::Literal(linxts_ir::Literal::Integer(0)) => {
+                    self.error_here("LXT-130", "range step cannot be zero");
+                    1
+                }
+                ExpressionKind::Literal(linxts_ir::Literal::Integer(value)) => {
+                    value.saturating_neg()
+                }
+                _ => {
+                    self.error_here("LXT-131", "range step must be an integer literal");
+                    1
+                }
+            },
+            ExpressionKind::Literal(linxts_ir::Literal::Integer(_)) => {
+                self.error_here("LXT-130", "range step cannot be zero");
+                1
+            }
+            _ => {
+                self.error_here("LXT-131", "range step must be an integer literal");
+                1
+            }
+        };
+
+        let newly_declared = self.declared.insert(name.clone());
+        let mut body = self.parse_required_block();
+        let increment_value = Expression::new(
+            ExpressionKind::Binary {
+                operator: BinaryOperator::Add,
+                left: Box::new(Expression::new(
+                    ExpressionKind::Variable { name: name.clone() },
+                    name_span,
+                )),
+                right: Box::new(step),
+            },
+            name_span,
+        );
+        body.statements.push(Statement::new(
+            StatementKind::Assignment {
+                name: name.clone(),
+                value: increment_value,
+            },
+            name_span,
+        ));
+
+        let initializer = Statement::new(
+            if newly_declared {
+                StatementKind::Variable {
+                    name: name.clone(),
+                    value: initial,
+                    mutable: true,
+                }
+            } else {
+                StatementKind::Assignment {
+                    name: name.clone(),
+                    value: initial,
+                }
+            },
+            merge(start, name_span),
+        );
+        let condition = Expression::new(
+            ExpressionKind::Binary {
+                operator: if step_value > 0 {
+                    BinaryOperator::Less
+                } else {
+                    BinaryOperator::Greater
+                },
+                left: Box::new(Expression::new(
+                    ExpressionKind::Variable { name },
+                    name_span,
+                )),
+                right: Box::new(limit),
+            },
+            name_span,
+        );
+        let end = body
+            .statements
+            .last()
+            .map_or(condition.span, |statement| statement.span);
+        let loop_statement =
+            Statement::new(StatementKind::Loop { condition, body }, merge(start, end));
+
+        if arguments_valid {
+            vec![initializer, loop_statement]
+        } else {
+            Vec::new()
+        }
     }
 
     fn parse_return(&mut self) -> Statement {
@@ -313,6 +589,8 @@ impl<'a> Parser<'a> {
 
     fn parse_print(&mut self) -> Statement {
         let start = self.current().span;
+        let c_style = self.check_identifier("printf");
+        let mut macro_style = false;
         if self.check_identifier("console") {
             self.advance();
             self.consume(&TokenKind::Dot);
@@ -323,32 +601,84 @@ impl<'a> Parser<'a> {
             }
         } else {
             self.advance();
-            self.consume(&TokenKind::Bang);
+            macro_style = self.consume(&TokenKind::Bang);
         }
         let parenthesized = self.consume(&TokenKind::LeftParen);
-        let expression = self.parse_expression(0);
+        let first = self.parse_expression(0);
+        let mut arguments = Vec::new();
+        while self.consume(&TokenKind::Comma) {
+            arguments.push(self.parse_expression(0));
+        }
         if parenthesized && !self.consume(&TokenKind::RightParen) {
             self.error_here("LXT-114", "expected `)` after print argument");
         }
-        let span = merge(start, expression.span);
+        let end = self.previous().span;
+        let span = merge(start, end);
+        let expression = if arguments.is_empty() && macro_style {
+            if let ExpressionKind::Literal(linxts_ir::Literal::String(template)) = &first.kind {
+                named_format(template, false, span)
+            } else {
+                first
+            }
+        } else if arguments.is_empty() {
+            first
+        } else if let ExpressionKind::Literal(linxts_ir::Literal::String(template)) = &first.kind {
+            match positional_format(template, arguments, c_style, span) {
+                Ok(expression) => expression,
+                Err(message) => {
+                    self.diagnostics.push(ParseDiagnostic {
+                        code: "LXT-119",
+                        message: message.clone(),
+                        span,
+                    });
+                    Expression::new(ExpressionKind::Error { message }, span)
+                }
+            }
+        } else {
+            let message = "formatted print requires a string template as its first argument";
+            self.diagnostics.push(ParseDiagnostic {
+                code: "LXT-119",
+                message: message.to_owned(),
+                span,
+            });
+            Expression::new(
+                ExpressionKind::Error {
+                    message: message.to_owned(),
+                },
+                span,
+            )
+        };
         Statement::new(StatementKind::Print(expression), span)
     }
 
     fn parse_required_block(&mut self) -> Block {
         self.depth += 1;
         let block = if self.consume(&TokenKind::LeftBrace) {
-            self.parse_statements(true)
+            self.parse_statements(BlockEnd::Brace)
         } else {
             self.consume(&TokenKind::Colon);
-            self.skip_separators();
-            if self.at(&TokenKind::Eof) {
+            if self.consume(&TokenKind::Newline) {
+                while self.consume(&TokenKind::Newline) {}
+                if self.consume(&TokenKind::Indent) {
+                    self.parse_statements(BlockEnd::Dedent)
+                } else if self.indentation_sensitive {
+                    self.error_here("LXT-132", "expected an indented block");
+                    Block::default()
+                } else if self.at(&TokenKind::Eof) {
+                    self.error_here("LXT-115", "expected block body");
+                    Block::default()
+                } else {
+                    Block {
+                        statements: self.parse_next_statements(),
+                    }
+                }
+            } else if self.at(&TokenKind::Eof) {
                 self.error_here("LXT-115", "expected block body");
                 Block::default()
             } else {
-                self.parse_statement()
-                    .map_or_else(Block::default, |statement| Block {
-                        statements: vec![statement],
-                    })
+                Block {
+                    statements: self.parse_next_statements(),
+                }
             }
         };
         self.depth = self.depth.saturating_sub(1);
@@ -405,6 +735,17 @@ impl<'a> Parser<'a> {
         match token.kind {
             TokenKind::Integer(value) => Expression::integer(value, token.span),
             TokenKind::String(value) => Expression::string(value, token.span),
+            TokenKind::Template(value) => named_format(&value, true, token.span),
+            TokenKind::Identifier(name)
+                if name.eq_ignore_ascii_case("f")
+                    && matches!(&self.current().kind, TokenKind::String(_)) =>
+            {
+                let string_token = self.advance().clone();
+                let TokenKind::String(value) = string_token.kind else {
+                    unreachable!("guard requires string token");
+                };
+                named_format(&value, false, merge(token.span, string_token.span))
+            }
             TokenKind::Identifier(name) if name.eq_ignore_ascii_case("true") => {
                 Expression::boolean(true, token.span)
             }
@@ -509,11 +850,34 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn is_c_function_start(&self) -> bool {
+        (self.check_identifier("int") || self.check_identifier("void"))
+            && matches!(
+                self.tokens.get(self.cursor + 1).map(|token| &token.kind),
+                Some(TokenKind::Identifier(_))
+            )
+            && matches!(
+                self.tokens.get(self.cursor + 2).map(|token| &token.kind),
+                Some(TokenKind::LeftParen)
+            )
+    }
+
+    fn is_c_declaration_start(&self) -> bool {
+        if !(self.check_identifier("int") || self.check_identifier("char")) {
+            return false;
+        }
+        matches!(
+            self.tokens.get(self.cursor + 1).map(|token| &token.kind),
+            Some(TokenKind::Identifier(_)) | Some(TokenKind::Star)
+        )
+    }
+
     fn is_print_start(&self) -> bool {
         match &self.current().kind {
             TokenKind::Identifier(name) => {
                 name.eq_ignore_ascii_case("print")
                     || name.eq_ignore_ascii_case("println")
+                    || name.eq_ignore_ascii_case("printf")
                     || (name.eq_ignore_ascii_case("console")
                         && matches!(
                             self.tokens.get(self.cursor + 1).map(|token| &token.kind),
@@ -603,6 +967,142 @@ impl<'a> Parser<'a> {
     }
 }
 
+fn positional_format(
+    template: &str,
+    arguments: Vec<Expression>,
+    c_style: bool,
+    span: Span,
+) -> Result<Expression, String> {
+    let mut arguments = arguments.into_iter();
+    let mut segments = Vec::new();
+    let mut text = String::new();
+    let characters: Vec<char> = template.chars().collect();
+    let mut index = 0;
+    while index < characters.len() {
+        if c_style && characters[index] == '%' {
+            if characters.get(index + 1) == Some(&'%') {
+                text.push('%');
+                index += 2;
+                continue;
+            }
+            if matches!(characters.get(index + 1), Some('d' | 'i' | 's' | 'f')) {
+                flush_format_text(&mut segments, &mut text);
+                let value = arguments
+                    .next()
+                    .ok_or_else(|| "not enough values for printf placeholders".to_owned())?;
+                segments.push(FormatSegment::Value(value));
+                index += 2;
+                continue;
+            }
+            return Err("unsupported or incomplete printf placeholder".to_owned());
+        }
+        if !c_style && characters[index] == '{' {
+            if characters.get(index + 1) == Some(&'{') {
+                text.push('{');
+                index += 2;
+                continue;
+            }
+            if characters.get(index + 1) == Some(&'}') {
+                flush_format_text(&mut segments, &mut text);
+                let value = arguments
+                    .next()
+                    .ok_or_else(|| "not enough values for `{}` placeholders".to_owned())?;
+                segments.push(FormatSegment::Value(value));
+                index += 2;
+                continue;
+            }
+            return Err("only `{}` positional placeholders are supported".to_owned());
+        }
+        if !c_style && characters[index] == '}' && characters.get(index + 1) == Some(&'}') {
+            text.push('}');
+            index += 2;
+            continue;
+        }
+        text.push(characters[index]);
+        index += 1;
+    }
+    flush_format_text(&mut segments, &mut text);
+    if arguments.next().is_some() {
+        return Err("too many values for format placeholders".to_owned());
+    }
+    Ok(Expression::format(segments, span))
+}
+
+fn named_format(template: &str, javascript: bool, span: Span) -> Expression {
+    let mut segments = Vec::new();
+    let mut text = String::new();
+    let characters: Vec<char> = template.chars().collect();
+    let mut index = 0;
+    while index < characters.len() {
+        let opening = if javascript {
+            characters[index] == '$' && characters.get(index + 1) == Some(&'{')
+        } else {
+            characters[index] == '{' && characters.get(index + 1) != Some(&'{')
+        };
+        if !opening {
+            if !javascript && characters[index] == '{' && characters.get(index + 1) == Some(&'{') {
+                text.push('{');
+                index += 2;
+            } else if !javascript
+                && characters[index] == '}'
+                && characters.get(index + 1) == Some(&'}')
+            {
+                text.push('}');
+                index += 2;
+            } else {
+                text.push(characters[index]);
+                index += 1;
+            }
+            continue;
+        }
+
+        flush_format_text(&mut segments, &mut text);
+        index += if javascript { 2 } else { 1 };
+        let name_start = index;
+        while index < characters.len() && characters[index] != '}' {
+            index += 1;
+        }
+        if index == characters.len() {
+            return Expression::new(
+                ExpressionKind::Error {
+                    message: "unterminated interpolation placeholder".to_owned(),
+                },
+                span,
+            );
+        }
+        let name: String = characters[name_start..index].iter().collect();
+        if !is_simple_identifier(&name) {
+            return Expression::new(
+                ExpressionKind::Error {
+                    message: "interpolation supports simple variable names only".to_owned(),
+                },
+                span,
+            );
+        }
+        segments.push(FormatSegment::Value(Expression::new(
+            ExpressionKind::Variable { name },
+            span,
+        )));
+        index += 1;
+    }
+    flush_format_text(&mut segments, &mut text);
+    Expression::format(segments, span)
+}
+
+fn flush_format_text(segments: &mut Vec<FormatSegment>, text: &mut String) {
+    if !text.is_empty() {
+        segments.push(FormatSegment::Text(std::mem::take(text)));
+    }
+}
+
+fn is_simple_identifier(value: &str) -> bool {
+    let mut characters = value.chars();
+    characters
+        .next()
+        .is_some_and(|character| character == '_' || character.is_alphabetic())
+        && characters.all(|character| character == '_' || character.is_alphanumeric())
+}
+
 fn merge(start: Span, end: Span) -> Span {
     Span::new(
         start.source,
@@ -616,7 +1116,11 @@ mod tests {
     use super::*;
 
     fn parse(text: &str) -> ParsedUnit {
-        Parser::parse(SourceId(0), 0, text, &mut HashSet::new())
+        Parser::parse(SourceId(0), 0, text, &mut HashSet::new(), false)
+    }
+
+    fn parse_python(text: &str) -> ParsedUnit {
+        Parser::parse(SourceId(0), 0, text, &mut HashSet::new(), true)
     }
 
     #[test]
@@ -637,6 +1141,57 @@ mod tests {
             unit.block.statements[0].kind,
             StatementKind::Print(_)
         ));
+    }
+
+    #[test]
+    fn parses_c_main_and_printf() {
+        let unit = parse("int main() { printf(\"Hello\"); return 0; }");
+        assert!(unit.is_complete(), "{:?}", unit.diagnostics);
+        assert_eq!(unit.functions.len(), 1);
+        assert_eq!(unit.functions[0].name, "main");
+        assert!(matches!(
+            unit.functions[0].body.statements[0].kind,
+            StatementKind::Print(_)
+        ));
+    }
+
+    #[test]
+    fn parses_cross_language_format_forms() {
+        for source in [
+            "x = 7\nprint(f\"value={x}\")\n",
+            "let x = 7; console.log(`value=${x}`);",
+            "let x = 7; println!(\"value={}\", x);",
+            "int x = 7; printf(\"value=%d\", x);",
+        ] {
+            let unit = parse(source);
+            assert!(unit.is_complete(), "{source}: {:?}", unit.diagnostics);
+            assert!(matches!(
+                unit.block.statements[1].kind,
+                StatementKind::Print(Expression {
+                    kind: ExpressionKind::Format { .. },
+                    ..
+                })
+            ));
+        }
+    }
+
+    #[test]
+    fn parses_python_indentation_and_range_loop() {
+        let unit = parse_python(
+            "total = 0\nfor i in range(1, 4):\n    total = total + i\n    print(i)\nprint(total)\n",
+        );
+        assert!(unit.is_complete(), "{:?}", unit.diagnostics);
+        assert_eq!(unit.block.statements.len(), 4);
+        let StatementKind::Loop { body, .. } = &unit.block.statements[2].kind else {
+            panic!("range should lower to a condition-controlled loop");
+        };
+        assert_eq!(body.statements.len(), 3);
+    }
+
+    #[test]
+    fn rejects_unindented_python_block() {
+        let unit = parse_python("if true:\nprint(1)\n");
+        assert_eq!(unit.diagnostics[0].code, "LXT-132");
     }
 
     #[test]

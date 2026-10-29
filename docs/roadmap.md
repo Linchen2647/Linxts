@@ -8,38 +8,52 @@
 - [x] deterministic staged language detection
 - [x] tolerant lexer/parser with partial error nodes
 - [x] bounded deterministic repair and audit records
-- [x] Unified IR v0.1 and validator
+- [x] Unified IR v0.2 with cross-language format expressions and validator
 - [x] tree-walking VM backend
 - [x] CLI commands and diagnostics
 - [x] representative unit and integration tests
 - [x] GitHub Actions configuration
-- [ ] broader Python indentation and JavaScript/Rust subset coverage
-- [ ] compilation cache
+- [x] basic C adapter (`int main`, integer declarations, `printf`, return)
+- [x] Python indentation suites and `for ... in range(...)` lowering
+- [ ] broader Python and JavaScript/Rust/C subset coverage
+- [x] compilation cache for successful validated compilations
 
 ## Phase 2 — AI compilation
 
-- [ ] typed AI candidate protocol implementation
-- [ ] llama.cpp HTTP health and completion client
-- [ ] local 3B → 7B → optional larger model escalation
-- [ ] timeout, retry, cancellation, and context/token budgets
-- [ ] mock provider and offline CI tests
-- [ ] validated AI candidate cache
+- [x] typed AI candidate protocol implementation
+- [x] llama.cpp HTTP health and completion client
+- [x] local 3B → 7B → optional larger model escalation
+- [x] configurable Linxts-Mini first-tier endpoint and status checks
+- [x] compiler-validated Linxts-Mini seed dataset, split validator, and independent benchmark
+- [x] approved two-step 0.5B LoRA compatibility smoke and base/smoke-adapter benchmark
+- [x] compiler-validated 1,121-sample corpus and authorized 100-step LoRA pilot
+- [x] expand to a 1,941-sample fallback-focused corpus, 21 fixed holdouts, and a 300-step Mini pilot
+- [x] merge and re-evaluate the selected Mini adapter with local-only safetensors tooling
+- [x] convert the selected Mini model to F16 and Q4_K_M GGUF and execute Vulkan llama.cpp acceptance
+- [ ] run a formally approved Mini/3B/7B comparison
+- [x] timeout, retry, cancellation, and context/token budgets
+- [x] mock provider and offline CI tests
+- [x] reproducible real-model 3B → 7B acceptance runner and evidence specification
+- [ ] execute real-model acceptance with approved, hash-pinned GGUF artifacts
+- [x] validated AI candidate stored in the compilation cache
 - [ ] explicitly authorized, extensible online provider interface
 
 ## Phase 3 — Mixed language
 
 - [x] simple top-level variables shared across deterministic segments
 - [x] simple natural-language arithmetic over a shared variable
+- [x] VM and native integration coverage for shared variables, functions, loops, and formatting
 - [ ] explicit cross-language conversion matrix
 - [ ] richer lexical scopes and function boundaries
 - [ ] module/import model
 
 ## Phase 4 — Native compilation
 
+- [x] system-C bootstrap backend producing a standalone Linux executable
+- [x] native executable integration test
 - [ ] evaluate Cranelift and LLVM against the IR and runtime requirements
-- [ ] define runtime ABI
-- [ ] Linux x86_64 object/link pipeline
-- [ ] standalone ELF integration tests
+- [ ] define stable runtime ABI
+- [ ] direct Linux x86_64 object/link pipeline
 - [ ] optimizations and release artifacts
 
 ## Phase 5 — Ecosystem

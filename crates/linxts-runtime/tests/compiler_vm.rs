@@ -28,11 +28,48 @@ fn language_hints_and_repair_have_expected_output() {
         execute("^rust\nfn main() {\n  println!(\"Hello\")\n"),
         "Hello\n"
     );
+    assert_eq!(
+        execute("^C語言\nint main() {\n  printf(\"Hello from C\");\n  return 0;\n"),
+        "Hello from C\n"
+    );
+}
+
+#[test]
+fn simplified_chinese_mixed_sample_repairs_and_executes() {
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../examples/mixed-simplified.lx"
+    ));
+    assert_eq!(execute(source), "9\n720\n5\n");
 }
 
 #[test]
 fn natural_sum_has_expected_output() {
     assert_eq!(execute("幫我算出1到100的總和\n"), "5050\n");
+}
+
+#[test]
+fn cross_language_formatting_shares_variables() {
+    let source = "^python\nx = 7\nprint(f\"py={x}\")\n^javascript\nconsole.log(`js=${x}`)\n^rust\nprintln!(\"rs={}\", x)\n^c\nprintf(\"c=%d\", x)\n";
+    assert_eq!(execute(source), "py=7\njs=7\nrs=7\nc=7\n");
+}
+
+#[test]
+fn python_indentation_and_range_execute() {
+    let source = "^python\ntotal = 0\nfor i in range(1, 5):\n    total = total + i\nprint(f\"total={total}\")\nfor j in range(3, 0, -1):\n    print(j)\n";
+    assert_eq!(execute(source), "total=10\n3\n2\n1\n");
+}
+
+#[test]
+fn aggressive_repair_preserves_python_indentation() {
+    let source = "^python\nfor i in range(2):\n    print(\"x\n";
+    assert_eq!(execute(source), "x\nx\n");
+}
+
+#[test]
+fn mixed_language_functions_loops_and_formatting_execute() {
+    let source = "^python\ndef add_one(value):\n    return value + 1\nseed = 4\n^javascript\nlet shared = add_one(seed);\nconsole.log(`js=${shared}`);\n^rust\nlet count = 0;\nwhile count < 3 {\n    count = count + 1;\n}\nprintln!(\"rs={}:{}\", shared, count);\n^c\nprintf(\"c=%d\", shared + count);\n";
+    assert_eq!(execute(source), "js=5\nrs=5:3\nc=8\n");
 }
 
 #[test]

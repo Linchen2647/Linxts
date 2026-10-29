@@ -1,0 +1,38 @@
+{
+  "status": "not_run",
+  "run_id": "replace-me",
+  "git": {
+    "commit": "replace-me",
+    "dirty": null
+  },
+  "dataset": {
+    "manifest_sha256": "replace-me",
+    "split_sha256": {}
+  },
+  "base_model": {
+    "id": "replace-me",
+    "revision": "replace-me",
+    "license": "replace-me",
+    "artifact_sha256": {}
+  },
+  "environment": {
+    "python": "replace-me",
+    "lock_sha256": "replace-me",
+    "gpu": "replace-me",
+    "driver": "replace-me",
+    "rocm": "replace-me",
+    "torch": "replace-me",
+    "torch_hip": "replace-me"
+  },
+  "training": {
+    "config_sha256": "replace-me",
+    "seeds": [],
+    "smoke_passed": false,
+    "peak_vram_bytes": null,
+    "resumed_from": null
+  },
+  "metrics": {},
+  "selected_checkpoint": null,
+  "gguf": null,
+  "notes": []
+}

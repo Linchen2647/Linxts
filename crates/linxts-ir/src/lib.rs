@@ -4,7 +4,7 @@ use linxts_source::Span;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-pub const IR_SCHEMA_VERSION: &str = "0.1";
+pub const IR_SCHEMA_VERSION: &str = "0.2";
 pub const MAX_IR_DEPTH: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,7 +68,7 @@ impl Statement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum StatementKind {
     Variable {
         name: String,
@@ -141,10 +141,20 @@ impl Expression {
             effect: Effect::Pure,
         }
     }
+
+    #[must_use]
+    pub fn format(segments: Vec<FormatSegment>, span: Span) -> Self {
+        Self {
+            kind: ExpressionKind::Format { segments },
+            span,
+            ty: Type::String,
+            effect: Effect::Pure,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum ExpressionKind {
     Literal(Literal),
     Variable {
@@ -163,9 +173,19 @@ pub enum ExpressionKind {
         callee: String,
         arguments: Vec<Expression>,
     },
+    Format {
+        segments: Vec<FormatSegment>,
+    },
     Error {
         message: String,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "data", rename_all = "snake_case")]
+pub enum FormatSegment {
+    Text(String),
+    Value(Expression),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -414,6 +434,13 @@ impl Validator {
                     self.validate_expression(argument, scopes, depth + 1);
                 }
             }
+            ExpressionKind::Format { segments } => {
+                for segment in segments {
+                    if let FormatSegment::Value(value) = segment {
+                        self.validate_expression(value, scopes, depth + 1);
+                    }
+                }
+            }
             ExpressionKind::Error { message } => self.error(
                 "LXT-IR-011",
                 format!("unresolved parser error node: {message}"),
@@ -479,5 +506,40 @@ mod tests {
             span,
         ));
         assert!(Validator::validate(&module).is_empty());
+    }
+
+    #[test]
+    fn validates_format_interpolation_scope() {
+        let span = Span::empty(SourceId(0), 0);
+        let mut module = Module::new("hash");
+        module.body.statements.push(Statement::new(
+            StatementKind::Print(Expression::format(
+                vec![
+                    FormatSegment::Text("value=".to_owned()),
+                    FormatSegment::Value(Expression::new(
+                        ExpressionKind::Variable {
+                            name: "missing".to_owned(),
+                        },
+                        span,
+                    )),
+                ],
+                span,
+            )),
+            span,
+        ));
+        assert_eq!(Validator::validate(&module)[0].code, "LXT-IR-008");
+    }
+
+    #[test]
+    fn json_round_trip_preserves_newtype_nodes() {
+        let span = Span::empty(SourceId(0), 0);
+        let mut module = Module::new("hash");
+        module.body.statements.push(Statement::new(
+            StatementKind::Print(Expression::integer(1, span)),
+            span,
+        ));
+        let json = serde_json::to_string(&module).expect("serialize IR");
+        let decoded: Module = serde_json::from_str(&json).expect("deserialize IR");
+        assert_eq!(decoded, module);
     }
 }

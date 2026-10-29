@@ -1,35 +1,36 @@
-# Linxts
+# Linxts-lang
 
 **Linxts Adaptive Compilation System** is an experimental, AI-native adaptive multi-language compiler written in Rust. It accepts `.lx` files, detects language regions, performs traceable deterministic repairs, lowers supported syntax into a language-neutral IR, validates that IR, and executes it with a built-in VM.
 
-> Status: **v0.1.0-alpha MVP in development.** The deterministic compiler and VM are functional for the documented subset. Native ELF generation and llama.cpp integration are not implemented in this revision. `linxts build` emits a versioned `.lxb` IR/VM artifact, not an executable.
+> Status: **v0.1.0-alpha MVP in development.** The deterministic compiler, VM, structured AI protocol, local llama.cpp fallback router, validated cache, and a Linux native bootstrap backend are functional for the documented subset. `linxts build` produces a real executable through the system C compiler; direct Cranelift/LLVM code generation is not implemented. Use `--vm` to emit a versioned `.lxb` IR/VM artifact instead.
 
 ## Why Linxts
 
-Linxts explores a compiler model where users express intent in Python-, JavaScript-, Rust-, generic-, or natural-language fragments while the compiler owns detection, conservative repair, semantic validation, and execution. AI is a fallback, never the trust boundary: model output must become validated Linxts IR before it can run.
+Linxts explores a compiler model where users express intent in Python-, JavaScript-, Rust-, C-, generic-, or natural-language fragments while the compiler owns detection, conservative repair, semantic validation, and execution. AI is a fallback, never the trust boundary: model output must become validated Linxts IR before it can run.
 
 ## Current architecture
 
 ```text
 .lx source -> source manager -> hint scanner -> detector
            -> tolerant parser -> deterministic repair (if needed)
-           -> Linxts IR v0.1 -> IR validator -> tree-walking VM
+           -> Linxts IR v0.2 -> IR validator -> tree-walking VM
 ```
 
-Planned AI path:
+AI fallback path:
 
 ```text
-unresolved -> llama.cpp 3B -> 7B -> optional larger local model
-           -> explicitly authorized online provider -> IR validator
+unresolved -> Linxts-Mini -> llama.cpp 3B -> 7B -> optional larger local model
+           -> strict candidate JSON -> IR validator -> VM
 ```
 
-Normal parseable programs do not invoke a model.
+An online-provider tier is reserved by the router but is skipped without explicit authorization; no online provider is implemented yet. Normal parseable programs do not invoke a model.
 
 ## Requirements
 
 - Rust stable 1.85 or newer
 - Linux x86_64 is the first supported development target
 - No GPU, model, API key, Python, Node.js, or external language runtime is required for the MVP
+- A C11 compiler (`cc`) is required only for `linxts build`; the resulting executable does not need Linxts or AI at runtime
 
 ## Build and install
 
@@ -58,14 +59,15 @@ The CLI writes backend status to standard error so program output remains pipe-f
 linxts run <file.lx>       Compile and run with the Linxts VM
 linxts check <file.lx>     Parse and validate without execution
 linxts explain <file.lx>   Show detection, repairs, diagnostics, and IR
-linxts build <file.lx>     Emit a .lxb VM artifact (not native code)
+linxts build <file.lx>     Produce a native executable via system C (default)
+linxts build <file.lx> --vm  Emit a .lxb VM artifact instead
 linxts models list         Show configured AI models
-linxts models test         Test model availability (not enabled yet)
+linxts models test         Health-check configured llama.cpp servers
 linxts config show         Show effective MVP settings
 linxts doctor              Inspect local prerequisites
 ```
 
-Compilation flags include `--aggressive` (default), `--strict`, `--offline`, `--no-ai`, `--show-ir`, `--verbose`, and `--fun-errors`.
+Compilation flags include `--aggressive` (default), `--strict`, `--offline`, `--no-ai`, `--no-cache`, `--show-ir`, `--verbose`, and `--fun-errors`.
 
 ## Examples
 
@@ -82,6 +84,18 @@ Hinted JavaScript with a repairable delimiter:
 console.log("Hello"
 ```
 
+C subset with a descriptive hint:
+
+```text
+^C語言
+int main() {
+    printf("Hello from C");
+    return 0;
+}
+```
+
+Known short hints may also share a line with their first statement, for example `^python print("Hello")`.
+
 Mixed input with a shared variable:
 
 ```text
@@ -95,32 +109,97 @@ console.log(x)
 把 x 乘以 5，然後顯示結果
 ```
 
-The current VM prints `10` and `50` for the mixed example.
+The current VM prints `10` and `50` for the mixed example. Integration coverage also exercises a Python-defined function called from JavaScript, a Rust-style loop over shared values, and formatted JavaScript/Rust/C output through both the VM and native bootstrap backend.
+
+A complete Simplified Chinese mixed example with aggressive repair and deterministic factorial lowering is available at [`examples/mixed-simplified.lx`](examples/mixed-simplified.lx):
+
+```bash
+cargo run -p linxts-cli --offline -- run examples/mixed-simplified.lx --no-ai
+```
+
+```text
+9
+720
+5
+```
+
+The Rust `rust()` function is repaired and compiled but is not executed because the source defines it without calling it. The C `main()` function runs after top-level Python and natural-language statements.
 
 ## Supported subset
 
 | Capability | Status |
 | --- | --- |
 | Unicode source, spans, line/column diagnostics | Implemented |
-| `^python`, `^py`, `^javascript`, `^js`, `^rust`, descriptive and natural-language hints | Implemented |
+| `^python`, `^py`, `^javascript`, `^js`, `^rust`, `^c`, `^C語言`, descriptive and natural-language hints | Implemented |
 | Marker-free deterministic language detection | Implemented, heuristic scoring |
 | Integers, strings, booleans, variables, assignment, arithmetic, comparison | Implemented |
-| `print`, `Print`, `console.log`, `println!` | Implemented |
+| `print`, `Print`, `console.log`, `println!`, and `printf` | Implemented subset |
+| Python f-strings, JavaScript templates, Rust `{}`/captured placeholders, and C format placeholders | Implemented basic interpolation subset |
+| C `int`/`void` functions, integer declarations, `printf`, and return | Implemented subset |
 | Brace-delimited `if` and `while` | Implemented subset |
 | Functions, calls, parameters, return | Implemented subset |
-| Missing quote/parenthesis/brace repair and selected typo repair | Implemented |
-| Chinese sum/even-range and simple variable arithmetic intents | Deterministic subset |
-| Python indentation semantics | Not implemented |
-| Full Python/JavaScript/Rust semantics | Not implemented |
-| llama.cpp fallback router | Planned next milestone |
-| Compilation cache | Planned |
-| Native Linux ELF backend | Planned; `build` is not native |
+| Missing quote/parenthesis/brace repair, misplaced numeric output-string quote repair, and selected typo repair | Implemented |
+| Chinese sum/even-range/factorial and simple variable arithmetic intents | Deterministic subset |
+| Python indentation and `for ... in range(...)` | Implemented subset; ranges lower to validated loop IR |
+| Full Python/JavaScript/Rust/C semantics | Not implemented |
+| llama.cpp structured fallback with configurable Mini → 3B → 7B → larger-local escalation | Router implemented; the Q4_K_M Mini candidate passed the fixed AI-required holdouts and local Vulkan smoke, with endpoint configuration remaining opt-in |
+| AI timeout, retry, cancellation token, token/context budget, health check | Implemented |
+| Online model providers | Not implemented; router authorization gate exists |
+| Compilation cache | Implemented for successful validated compilations; native artifacts not cached yet |
+| Linux x86_64 native executable | Implemented through an explicit system-C bootstrap backend |
+| Direct Cranelift/LLVM backend | Planned |
 
-Language adapters intentionally preserve distinct semantics as the project grows; syntax resemblance does not imply Python, JavaScript, and Rust are interchangeable.
+The Python adapter recognizes space- or tab-indented suites after `:` and one-, two-, or three-argument `range` loops. The range step must be a nonzero integer literal; both ascending and descending ranges are supported. This remains a deliberate subset of Python rather than a Python runtime.
+
+Language adapters intentionally preserve distinct semantics as the project grows; syntax resemblance does not imply Python, JavaScript, Rust, and C are interchangeable.
 
 ## AI configuration
 
-No model is downloaded automatically. This revision does not issue network requests or upload source code. The next milestone adds a llama.cpp HTTP provider with explicit health checks, timeout and escalation limits, versioned structured output, and mock-backed CI tests. Online providers will remain opt-in and require explicit authorization.
+No model is downloaded automatically. Start compatible llama.cpp HTTP servers yourself, then configure one or more loopback endpoints:
+
+```bash
+# Optional first tier after a Linxts-Mini model has passed acceptance:
+export LINXTS_LLAMA_MINI_URL=http://127.0.0.1:8079
+export LINXTS_LLAMA_MINI_MODEL=linxts-mini
+
+export LINXTS_LLAMA_3B_URL=http://127.0.0.1:8080
+export LINXTS_LLAMA_3B_MODEL=my-3b-model
+export LINXTS_LLAMA_7B_URL=http://127.0.0.1:8081
+export LINXTS_LLAMA_7B_MODEL=my-7b-model
+# Optional: LINXTS_LLAMA_LARGE_URL and LINXTS_LLAMA_LARGE_MODEL
+
+linxts models list
+linxts models test
+```
+
+The client uses llama.cpp's native `/health` and `/completion` endpoints. CLI configuration rejects non-loopback URLs to avoid accidentally uploading source to an untrusted host. `LINXTS_AI_TIMEOUT_SECS` (1–600) and `LINXTS_AI_RETRIES` (0–5) control bounded inference. `--no-ai` prevents all model calls; `--offline` permits local endpoints but reserves the online tier as disabled.
+
+Every completion must contain a strict versioned candidate envelope. Source hash, schema version, side effects, scopes, calls, error nodes, and the entire IR are validated before the compiler replaces deterministic parse errors. Invalid JSON or IR escalates to the next configured local tier. No online provider is implemented or contacted.
+
+The Mini tier uses the same prompt contract as its validated training corpus and does not apply llama.cpp generation grammar. The recursive grammar produced schema-shaped but semantically invalid Mini output during real acceptance; unconstrained Mini generation followed by the unchanged strict candidate and IR validators passed the AI-required holdouts. The existing 3B/7B/larger-local tiers retain schema-guided generation.
+
+CI uses controlled mock HTTP providers only. Real-model **3B → 7B** acceptance has not yet been executed on this machine; [`scripts/accept-real-model-escalation.sh`](scripts/accept-real-model-escalation.sh) and the [acceptance specification](docs/real-model-acceptance.md) define that separate, hash-pinned procedure without downloading models. Linxts-Mini's pinned Q4_K_M Vulkan acceptance is recorded independently in the training experiment manifest.
+
+## Native compilation
+
+To produce and run a real Linux executable:
+
+```bash
+linxts build examples/hello.lx --output hello
+./hello
+```
+
+To emit the inspectable VM artifact instead:
+
+```bash
+linxts build examples/hello.lx --vm   # examples/hello.lxb
+```
+
+The native path lowers validated Linxts IR to generated C and invokes the configured C11 compiler (`$CC`, otherwise `cc`). The temporary C file is removed after compilation. This is deliberately reported as the **system C bootstrap backend**, not as Cranelift, LLVM, or direct ELF code generation. The resulting executable needs the platform C runtime, but not Linxts, llama.cpp, a model, Python, or Node.js.
+
+## Compilation cache
+
+Successful validated compilations—including deterministic detection/repair data or an accepted AI candidate—are cached under `$LINXTS_CACHE_DIR`, `$XDG_CACHE_HOME/linxts`, or `~/.cache/linxts`. Keys include source/context/dependency hashes, compiler and IR schema versions, model identities, repair mode, target, and compile options. Cache entries are size-bounded, written atomically, version-checked, source-bound, and revalidated before use. Use `--no-cache` or `LINXTS_DISABLE_CACHE=1` to bypass it. Native artifacts are not cached yet.
 
 ## Safety and privacy
 
@@ -147,9 +226,13 @@ CI performs the same checks without GPU access, model files, or credentials.
 
 - [Architecture](docs/architecture.md)
 - [Language hints](docs/language-hints.md)
-- [IR v0.1](docs/ir-spec.md)
+- [IR v0.2](docs/ir-spec.md)
 - [Repair engine](docs/repair-engine.md)
 - [AI protocol](docs/ai-protocol.md)
+- [Local AI environment](docs/local-ai-environment.md)
+- [Real-model acceptance](docs/real-model-acceptance.md)
+- [Linxts-Mini training](docs/linxts-mini-training.md)
+- [Training workspace](training/README.md)
 - [Roadmap](docs/roadmap.md)
 
 ## Roadmap summary

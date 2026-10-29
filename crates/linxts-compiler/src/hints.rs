@@ -7,6 +7,7 @@ pub enum Language {
     Python,
     JavaScript,
     Rust,
+    C,
     Natural,
     Generic,
 }
@@ -17,6 +18,7 @@ impl std::fmt::Display for Language {
             Self::Python => "python",
             Self::JavaScript => "javascript",
             Self::Rust => "rust",
+            Self::C => "c",
             Self::Natural => "natural",
             Self::Generic => "generic",
         };
@@ -61,7 +63,7 @@ impl HintScanner {
                 None
             };
 
-            if let Some((raw, language, marker_column)) = marker {
+            if let Some(marker) = marker {
                 if !segment_text.trim().is_empty() {
                     segments.push(Segment {
                         explicit_language: current_language,
@@ -72,14 +74,23 @@ impl HintScanner {
                 } else {
                     segment_text.clear();
                 }
-                let marker_start = offset + marker_column;
-                current_language = language;
+                let marker_start = offset + marker.column;
+                current_language = marker.language;
                 current_hint = Some(Hint {
-                    language,
-                    raw: raw.to_owned(),
-                    span: Span::new(source, marker_start, offset + line.len()),
+                    language: marker.language,
+                    raw: marker.raw.to_owned(),
+                    span: Span::new(source, marker_start, offset + marker.marker_end),
                 });
-                segment_start = offset + line_with_ending.len();
+                if let Some(inline) = marker.inline {
+                    segment_start = offset + marker.inline_column;
+                    segment_text.push_str(inline);
+                    let line_ending = &line_with_ending[line.len()..];
+                    segment_text.push_str(line_ending);
+                    quote_state.consume(inline);
+                    quote_state.consume(line_ending);
+                } else {
+                    segment_start = offset + line_with_ending.len();
+                }
             } else {
                 if segment_text.is_empty() {
                     segment_start = offset;
@@ -102,24 +113,66 @@ impl HintScanner {
     }
 }
 
-fn parse_marker(line: &str) -> Option<(&str, Option<Language>, usize)> {
+struct ParsedMarker<'a> {
+    raw: &'a str,
+    language: Option<Language>,
+    column: usize,
+    marker_end: usize,
+    inline: Option<&'a str>,
+    inline_column: usize,
+}
+
+fn parse_marker(line: &str) -> Option<ParsedMarker<'_>> {
     let trimmed = line.trim_start();
     if !trimmed.starts_with('^') {
         return None;
     }
     let column = line.len() - trimmed.len();
-    let raw = trimmed[1..].trim();
-    if raw.is_empty() || raw.chars().any(char::is_whitespace) && !is_descriptive_hint(raw) {
+    let after_caret = &trimmed[1..];
+    let leading = after_caret.len() - after_caret.trim_start().len();
+    let raw = after_caret.trim();
+    if raw.is_empty() {
         return None;
     }
-    Some((raw, classify_alias(raw), column))
-}
 
-fn is_descriptive_hint(raw: &str) -> bool {
-    let normalized = raw.to_lowercase().replace([' ', '-', '_'], "");
-    ["python", "javascript", "rust", "自然語言", "自然语言"]
-        .iter()
-        .any(|name| normalized.contains(name))
+    if let Some(language) = classify_alias(raw) {
+        return Some(ParsedMarker {
+            raw,
+            language: Some(language),
+            column,
+            marker_end: line.len(),
+            inline: None,
+            inline_column: line.len(),
+        });
+    }
+
+    if let Some(first_whitespace) = raw.find(char::is_whitespace) {
+        let alias = &raw[..first_whitespace];
+        let language = classify_alias(alias)?;
+        let rest = &raw[first_whitespace..];
+        let inline = rest.trim_start();
+        if inline.is_empty() {
+            return None;
+        }
+        let inline_column = column + 1 + leading + first_whitespace + rest.len() - inline.len();
+        return Some(ParsedMarker {
+            raw: alias,
+            language: Some(language),
+            column,
+            marker_end: column + 1 + leading + alias.len(),
+            inline: Some(inline),
+            inline_column,
+        });
+    }
+
+    Some(ParsedMarker {
+        raw,
+        language: None,
+        column,
+        marker_end: line.len(),
+        inline: None,
+        inline_column: line.len(),
+    })
 }
 
 #[must_use]
@@ -152,6 +205,11 @@ pub fn classify_alias(raw: &str) -> Option<Language> {
         .any(|alias| normalized == *alias)
     {
         Some(Language::Rust)
+    } else if ["c", "clang", "c語言", "c语言", "這是c", "这是c"]
+        .iter()
+        .any(|alias| normalized == *alias)
+    {
+        Some(Language::C)
     } else if [
         "natural",
         "naturallanguage",
@@ -216,6 +274,16 @@ mod tests {
         let segments = HintScanner::scan(SourceId(0), "print(\"^javascript\")\n");
         assert_eq!(segments.len(), 1);
         assert!(segments[0].hint.is_none());
+    }
+
+    #[test]
+    fn supports_c_and_inline_known_hints() {
+        let segments = HintScanner::scan(SourceId(0), "^C語言\nprintf(\"C\")\n^python print(1)\n");
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].explicit_language, Some(Language::C));
+        assert_eq!(segments[1].explicit_language, Some(Language::Python));
+        assert_eq!(segments[1].text.trim(), "print(1)");
+        assert_eq!(segments[1].hint.as_ref().expect("hint").raw, "python");
     }
 
     #[test]

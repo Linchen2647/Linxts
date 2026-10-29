@@ -58,6 +58,7 @@ impl LanguageDetector {
             (Language::Python, 0_i32),
             (Language::JavaScript, 0),
             (Language::Rust, 0),
+            (Language::C, 0),
             (Language::Natural, 0),
             (Language::Generic, 1),
         ]);
@@ -83,6 +84,13 @@ impl LanguageDetector {
             &mut scores,
             Language::Rust,
             lower.matches("fn ").count() as i32 * 5 + lower.matches("let mut ").count() as i32 * 4,
+        );
+        score(
+            &mut scores,
+            Language::C,
+            lower.matches("printf(").count() as i32 * 8
+                + lower.matches("int main").count() as i32 * 7
+                + lower.matches("#include").count() as i32 * 6,
         );
         score(
             &mut scores,
@@ -116,7 +124,10 @@ impl LanguageDetector {
         if lower.contains("println!") || lower.contains("fn main") {
             evidence.push("Rust macro or function syntax".to_owned());
         }
-        if lower.contains("print(") && !lower.contains("println!") {
+        if lower.contains("printf(") || lower.contains("int main") {
+            evidence.push("C function or stdio syntax".to_owned());
+        }
+        if lower.contains("print(") && !lower.contains("println!") && !lower.contains("printf(") {
             evidence.push("Python-style print call".to_owned());
         }
         if matches!(lower.split_whitespace().next(), Some("print")) {
@@ -193,6 +204,14 @@ mod tests {
     fn uses_multiple_javascript_features() {
         let result = LanguageDetector::detect_segment(&segment("const x = 1; console.log(x);"));
         assert_eq!(result.primary_language(), Some(Language::JavaScript));
+    }
+
+    #[test]
+    fn recognizes_c_syntax() {
+        let result = LanguageDetector::detect_segment(&segment(
+            "int main() { printf(\"Hello\"); return 0; }",
+        ));
+        assert_eq!(result.primary_language(), Some(Language::C));
     }
 
     #[test]

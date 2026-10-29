@@ -1,0 +1,13 @@
+^这是Python
+PRINT 9
+^这是C语言
+int main(void) {
+    println!(5)
+    return 0
+}
+^这是Rust
+fn rust(){
+    print(""666)
+}
+^自然语言
+计算1~6的连乘，并输出

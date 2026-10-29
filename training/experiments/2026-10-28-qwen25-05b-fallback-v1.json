@@ -1,0 +1,134 @@
+{
+  "status": "invalidated_semantic_holdout_leak",
+  "run_id": "2026-10-28-qwen25-coder-05b-lora-fallback-v1",
+  "git": {
+    "base_commit": "5ca6e18d77207c06339a437cbe131e8c197ef00a",
+    "dirty_during_run": true
+  },
+  "dataset": {
+    "manifest_sha256": "7466b5bd66092b442d12bd3bdb91ab65ee841afd1f583ed52b2a6045868a7e27",
+    "schema": "linxts-mini-dataset-1",
+    "ir_schema": "0.2",
+    "seed": 20261026,
+    "total_samples": 1941,
+    "splits": {
+      "train": 1699,
+      "validation": 221,
+      "test": 21
+    },
+    "split_sha256": {
+      "train": "20b447b801f065ec3a8ac8cf0da10f58bc3f6dc1c9ee3858b70c71f65ad55f7c",
+      "validation": "6e7f823d350bdfa7976bf1f4af8c3b115132eb2e3f6c7d6c4cfb2fb578a20b62",
+      "test": "fb0a6a2b618b7f0de1662db2640cef3c7b8f246d0d38c2679da26723b07fb8d7"
+    },
+    "fallback_samples": 820,
+    "fallback_groups": 217,
+    "fallback_compile_without_ai": 0,
+    "token_lengths": {
+      "configured_max_length": 1536,
+      "maximum_observed": 1032,
+      "samples_over_1024": 31,
+      "samples_over_1536": 0
+    }
+  },
+  "base_model": {
+    "id": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+    "revision": "ea3f2471cf1b1f0db85067f1ef93848e38e88c25",
+    "license": "Apache-2.0",
+    "model_safetensors_sha256": "f9523886352217ded3aeeef552b381af79d568c6d49a4b9e423288cea56b0a44"
+  },
+  "environment": {
+    "python": "3.12.13",
+    "lock_sha256": "78a8f3917693f24b239b2c8a8b647d20aa7cca8d918f50b8b11f5e3037fa8b02",
+    "gpu": "AMD Radeon RX 6800 XT",
+    "driver": "amdgpu",
+    "torch": "2.14.0+rocm7.14",
+    "torch_hip": "7.14.60850",
+    "transformers": "5.20.2",
+    "peft": "0.21.2",
+    "accelerate": "1.15.0"
+  },
+  "training": {
+    "config_sha256": "7394d5e41dfd968adb4bf139cd429f6104ff9c9fae7fa721f54edf6b4f6a34f3",
+    "optimizer_steps": 300,
+    "effective_epochs": 2.8098881695114772,
+    "train_runtime_seconds": 1224.1763,
+    "train_steps_per_second": 0.245,
+    "train_loss": 0.04466952635285755,
+    "peak_vram_bytes": 3134444544,
+    "quantization": "none",
+    "resumed_from": null
+  },
+  "metrics": {
+    "linxts_no_ai_test": {
+      "language_detection_accuracy": 1.0,
+      "repair_parse_success_rate": 1.0,
+      "ir_schema_validity": 0.19047619047619047,
+      "ir_validator_pass_rate": 0.19047619047619047,
+      "execution_correctness": 0.19047619047619047,
+      "escalation_required_rate": 0.8095238095238095
+    },
+    "base_model_test": {
+      "prediction_sha256": "c09c7eb24e42ba4d5dfed858a4201ba97c604e2c4b0322ad27c70e75f116087c",
+      "ir_schema_validity": 0.0,
+      "ir_validator_pass_rate": 0.0,
+      "execution_correctness": 0.0,
+      "average_latency_ms": 2371.115693142894,
+      "prompt_tokens": 3138,
+      "completion_tokens": 2671,
+      "escalation_required_rate": 1.0
+    },
+    "fallback_v1_adapter_test": {
+      "prediction_sha256": "079236f708717a7429ae53007cd19db2ccc78c72772df3bfaac370567e725558",
+      "language_detection_accuracy": 1.0,
+      "repair_parse_success_rate": 1.0,
+      "ir_schema_validity": 1.0,
+      "ir_validator_pass_rate": 1.0,
+      "execution_correctness": 0.8571428571428571,
+      "average_latency_ms": 20712.907948142893,
+      "prompt_tokens": 3138,
+      "completion_tokens": 12381,
+      "escalation_required_rate": 0.1428571428571429
+    },
+    "contaminated_ai_required_holdouts": {
+      "samples": 17,
+      "schema_valid": 17,
+      "validator_valid": 17,
+      "execution_correct": 17,
+      "execution_correctness": 1.0
+    }
+  },
+  "failed_execution_holdouts": [
+    {
+      "id_prefix": "c-format-holdout",
+      "expected_stdout": "答案=42\n",
+      "actual_stdout": "答案=40\n"
+    },
+    {
+      "id_prefix": "mixed-loop-holdout",
+      "expected_stdout": "x=5\ndone=5\n",
+      "actual_stdout": "5\n"
+    },
+    {
+      "id_prefix": "natural-even-holdout",
+      "expected_stdout": "2\n4\n6\n",
+      "actual_stdout": "1\n3\n5\n"
+    }
+  ],
+  "selected_checkpoint": null,
+  "gguf": null,
+  "router_deployed": false,
+  "invalidated_by": {
+    "kind": "semantic_holdout_leak",
+    "test_sample": "natural-factorial-fallback",
+    "leaked_value": 6,
+    "cause": "The generated training range included factorial 6 under a different group_id.",
+    "correction": "Fallback v2 excludes value 6 from generated factorial training and substitutes value 16 to preserve corpus size."
+  },
+  "notes": [
+    "This run is retained as negative experiment evidence and must not be used for model selection.",
+    "All 21 predictions passed strict CandidateEnvelope deserialization and IR validation, but the AI-required aggregate is invalid because factorial 6 leaked semantically into training.",
+    "Three deterministic-supported cross-task holdouts produced valid but semantically incorrect IR, leaving overall execution correctness at 85.71%.",
+    "No checkpoint from this run was merged, converted, or configured in the router."
+  ]
+}

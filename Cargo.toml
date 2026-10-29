@@ -5,7 +5,10 @@ members = [
     "crates/linxts-ir",
     "crates/linxts-compiler",
     "crates/linxts-runtime",
+    "crates/linxts-ai",
+    "crates/linxts-backend",
     "crates/linxts-cli",
+    "crates/linxts-training",
 ]
 
 [workspace.package]
@@ -13,7 +16,7 @@ version = "0.1.0-alpha.1"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
-repository = "https://github.com/OWNER/linxts"
+repository = "https://github.com/Linchen2647/linxts-lang"
 
 [workspace.dependencies]
 clap = { version = "4.5", features = ["derive"] }

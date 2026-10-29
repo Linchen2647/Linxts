@@ -1,0 +1,39 @@
+[model]
+path = "training/models/Qwen2.5-Coder-0.5B-Instruct"
+revision = "ea3f2471cf1b1f0db85067f1ef93848e38e88c25"
+
+[dataset]
+path = "training/data/seed-v1"
+max_length = 1024
+
+[output]
+root = "training/runs"
+run_name = "qwen25-coder-05b-qlora-experiment"
+
+[training]
+seed = 20261026
+epochs = 3.0
+max_steps = -1
+batch_size = 1
+gradient_accumulation_steps = 16
+learning_rate = 0.0002
+warmup_ratio = 0.05
+weight_decay = 0.01
+logging_steps = 5
+save_steps = 50
+eval_steps = 50
+save_total_limit = 3
+gradient_checkpointing = true
+bf16 = false
+fp16 = true
+allow_cpu = false
+
+[lora]
+rank = 16
+alpha = 32
+dropout = 0.05
+target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+
+[quantization]
+# Experimental on this host. Do not use until ROCm PyTorch and bitsandbytes pass smoke tests.
+mode = "bnb_4bit"

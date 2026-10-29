@@ -1,0 +1,22 @@
+[package]
+name = "linxts-training"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "linxts-training"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+linxts-ai = { path = "../linxts-ai" }
+linxts-compiler = { path = "../linxts-compiler" }
+linxts-ir = { path = "../linxts-ir" }
+linxts-runtime = { path = "../linxts-runtime" }
+linxts-source = { path = "../linxts-source" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true

@@ -1,5 +1,10 @@
+mod ai_support;
+
 use clap::{Args, Parser, Subcommand};
-use linxts_compiler::{Compilation, CompileOptions, Compiler, Diagnostic, Severity};
+use linxts_backend::{CBootstrapBackend, NativeBuildOptions};
+use linxts_compiler::{
+    CacheKeyInput, Compilation, CompilationCache, CompileOptions, Compiler, Diagnostic, Severity,
+};
 use linxts_runtime::Vm;
 use linxts_source::{SourceFile, SourceId};
 use std::path::{Path, PathBuf};
@@ -14,11 +19,14 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Compile a .lx file to a versioned VM artifact (.lxb).
+    /// Compile a .lx file to a VM artifact or native executable.
     Build {
         source: PathBuf,
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Emit a .lxb VM artifact instead of a native executable.
+        #[arg(long)]
+        vm: bool,
         #[command(flatten)]
         flags: CompileFlags,
     },
@@ -79,6 +87,9 @@ struct CompileFlags {
     /// Prohibit online providers.
     #[arg(long)]
     offline: bool,
+    /// Disable reading and writing the validated compilation cache.
+    #[arg(long)]
+    no_cache: bool,
     /// Print the validated Linxts IR.
     #[arg(long)]
     show_ir: bool,
@@ -113,6 +124,7 @@ fn run(cli: Cli) -> Result<(), u8> {
         Command::Build {
             source,
             output,
+            vm,
             flags,
         } => {
             let (source_file, compilation) = compile_path(&source, &flags)?;
@@ -121,22 +133,39 @@ fn run(cli: Cli) -> Result<(), u8> {
                 emit_diagnostics(&source_file, &compilation.diagnostics, flags.fun_errors);
                 return Err(1);
             }
-            let output = output.unwrap_or_else(|| source.with_extension("lxb"));
-            let json = serde_json::to_vec_pretty(&compilation.module).map_err(|error| {
-                eprintln!("[ERROR LXT-BLD-001] Failed to encode VM artifact: {error}");
-                2
-            })?;
-            std::fs::write(&output, json).map_err(|error| {
+            if !vm {
+                let output = output.unwrap_or_else(|| source.with_extension(""));
+                CBootstrapBackend::build(
+                    &compilation.module,
+                    &output,
+                    &NativeBuildOptions::default(),
+                )
+                .map_err(|error| {
+                    eprintln!("[ERROR LXT-BLD-003] Native build failed: {error}");
+                    2
+                })?;
                 eprintln!(
-                    "[ERROR LXT-BLD-002] Failed to write {}: {error}",
+                    "[OK] Wrote native executable: {} (system C bootstrap backend)",
                     output.display()
                 );
-                2
-            })?;
-            eprintln!(
-                "[OK] Wrote Linxts VM artifact: {} (not a native executable)",
-                output.display()
-            );
+            } else {
+                let output = output.unwrap_or_else(|| source.with_extension("lxb"));
+                let json = serde_json::to_vec_pretty(&compilation.module).map_err(|error| {
+                    eprintln!("[ERROR LXT-BLD-001] Failed to encode VM artifact: {error}");
+                    2
+                })?;
+                std::fs::write(&output, json).map_err(|error| {
+                    eprintln!(
+                        "[ERROR LXT-BLD-002] Failed to write {}: {error}",
+                        output.display()
+                    );
+                    2
+                })?;
+                eprintln!(
+                    "[OK] Wrote Linxts VM artifact: {} (not a native executable)",
+                    output.display()
+                );
+            }
             Ok(())
         }
         Command::Run { source, flags } => {
@@ -146,7 +175,7 @@ fn run(cli: Cli) -> Result<(), u8> {
                 emit_diagnostics(&source_file, &compilation.diagnostics, flags.fun_errors);
                 return Err(1);
             }
-            eprintln!("[Linxts] Backend: tree-walking VM (native ELF is not implemented yet)");
+            eprintln!("[Linxts] Backend: tree-walking VM (`build` emits a native executable)");
             let stdout = std::io::stdout();
             let mut output = stdout.lock();
             Vm::new(&mut output)
@@ -202,13 +231,9 @@ fn run(cli: Cli) -> Result<(), u8> {
         }
         Command::Models { command } => {
             match command {
-                ModelsCommand::List => {
-                    println!("No AI models configured.");
-                    println!("The deterministic compiler remains available with --no-ai.");
-                }
+                ModelsCommand::List => ai_support::list_models(),
                 ModelsCommand::Test => {
-                    println!("AI backend is not enabled in this MVP build.");
-                    return Err(1);
+                    ai_support::test_models().map_err(|()| 1)?;
                 }
             }
             Ok(())
@@ -217,9 +242,12 @@ fn run(cli: Cli) -> Result<(), u8> {
             match command {
                 ConfigCommand::Show => {
                     println!("repair.mode = aggressive");
-                    println!("ai.enabled = false (MVP)");
+                    println!("ai.local_endpoints = {}", ai_support::configured_count());
+                    println!("ai.online_authorized = false");
+                    println!("cache.enabled = true (override with --no-cache)");
                     println!("backend.run = tree-walking-vm");
-                    println!("backend.build = versioned-ir-artifact");
+                    println!("backend.build.default = system-c-bootstrap");
+                    println!("backend.build.vm = versioned-ir-artifact");
                 }
             }
             Ok(())
@@ -242,7 +270,38 @@ fn compile_path(path: &Path, flags: &CompileFlags) -> Result<(SourceFile, Compil
         eprintln!("[ERROR LXT-SRC-002] {error}");
         2
     })?;
-    let compilation = Compiler::compile(&source, flags.options());
+    let options = flags.options();
+    let mut key = CacheKeyInput::new(source.snapshot_hash(), options);
+    if !flags.no_ai {
+        key.model_identity = ai_support::cache_model_identity();
+    }
+    let cache_enabled = !flags.no_cache && std::env::var_os("LINXTS_DISABLE_CACHE").is_none();
+    let cache = CompilationCache::default_for_user();
+    if cache_enabled {
+        match cache.load(&key) {
+            Ok(Some(compilation)) => {
+                if flags.verbose {
+                    eprintln!("Cache: hit ({})", key.digest());
+                }
+                return Ok((source, compilation));
+            }
+            Ok(None) => {
+                if flags.verbose {
+                    eprintln!("Cache: miss ({})", key.digest());
+                }
+            }
+            Err(error) => eprintln!("[WARNING LXT-CACHE-001] Ignoring cache entry: {error}"),
+        }
+    }
+
+    let mut compilation = Compiler::compile(&source, options);
+    ai_support::attempt_fallback(&source, &mut compilation, flags);
+    if cache_enabled
+        && !compilation.has_errors()
+        && let Err(error) = cache.store(&key, &compilation)
+    {
+        eprintln!("[WARNING LXT-CACHE-002] Unable to store cache entry: {error}");
+    }
     Ok((source, compilation))
 }
 
@@ -304,7 +363,7 @@ fn doctor() {
     );
     println!("[OK] deterministic compiler: available");
     println!("[OK] VM backend: available");
-    println!("[TODO] native backend: unavailable");
+    report_command("cc", "native system C bootstrap backend");
     report_command("llama-server", "llama.cpp HTTP server");
     report_command("vulkaninfo", "Vulkan tooling");
     report_command("rocminfo", "ROCm tooling");

@@ -4,6 +4,7 @@ use linxts_source::{SourceId, Span};
 pub enum TokenKind {
     Integer(i64),
     String(String),
+    Template(String),
     Identifier(String),
     LeftParen,
     RightParen,
@@ -29,6 +30,8 @@ pub enum TokenKind {
     AndAnd,
     OrOr,
     Newline,
+    Indent,
+    Dedent,
     Eof,
     Error(String),
 }
@@ -39,10 +42,63 @@ pub struct Token {
     pub span: Span,
 }
 
-pub fn lex(source: SourceId, base: usize, input: &str) -> Vec<Token> {
+pub fn lex(source: SourceId, base: usize, input: &str, indentation_sensitive: bool) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut cursor = 0;
+    let mut at_line_start = true;
+    let mut indentation = vec![0_usize];
     while cursor < input.len() {
+        if indentation_sensitive && at_line_start {
+            let line_start = cursor;
+            let mut width = 0;
+            while cursor < input.len() {
+                match input[cursor..].chars().next().expect("valid cursor") {
+                    ' ' => {
+                        cursor += 1;
+                        width += 1;
+                    }
+                    '\t' => {
+                        cursor += 1;
+                        width += 4;
+                    }
+                    _ => break,
+                }
+            }
+            let next = input[cursor..].chars().next();
+            if !matches!(next, None | Some('\n' | '\r' | '#')) {
+                let current = *indentation.last().expect("indentation stack is non-empty");
+                if width > current {
+                    indentation.push(width);
+                    push(
+                        &mut tokens,
+                        source,
+                        base,
+                        line_start,
+                        cursor,
+                        TokenKind::Indent,
+                    );
+                } else if width < current {
+                    while indentation.last().is_some_and(|level| width < *level) {
+                        indentation.pop();
+                        push(&mut tokens, source, base, cursor, cursor, TokenKind::Dedent);
+                    }
+                    if indentation.last() != Some(&width) {
+                        push(
+                            &mut tokens,
+                            source,
+                            base,
+                            line_start,
+                            cursor,
+                            TokenKind::Error("inconsistent indentation".to_owned()),
+                        );
+                    }
+                }
+                at_line_start = false;
+            }
+        }
+        if cursor >= input.len() {
+            break;
+        }
         let character = input[cursor..].chars().next().expect("valid cursor");
         let width = character.len_utf8();
         match character {
@@ -57,6 +113,7 @@ pub fn lex(source: SourceId, base: usize, input: &str) -> Vec<Token> {
                     TokenKind::Newline,
                 );
                 cursor += width;
+                at_line_start = true;
             }
             '#' => cursor = skip_to_newline(input, cursor),
             '/' if input[cursor + width..].starts_with('/') => {
@@ -113,6 +170,38 @@ pub fn lex(source: SourceId, base: usize, input: &str) -> Vec<Token> {
                     TokenKind::String(value)
                 } else {
                     TokenKind::Error("unterminated string literal".to_owned())
+                };
+                push(&mut tokens, source, base, start, cursor, kind);
+            }
+            '`' => {
+                let start = cursor;
+                cursor += width;
+                let mut value = String::new();
+                let mut terminated = false;
+                while cursor < input.len() {
+                    let next = input[cursor..].chars().next().expect("valid cursor");
+                    cursor += next.len_utf8();
+                    if next == '`' {
+                        terminated = true;
+                        break;
+                    }
+                    if next == '\\' && cursor < input.len() {
+                        let escaped = input[cursor..].chars().next().expect("valid cursor");
+                        cursor += escaped.len_utf8();
+                        value.push(match escaped {
+                            'n' => '\n',
+                            'r' => '\r',
+                            't' => '\t',
+                            other => other,
+                        });
+                    } else {
+                        value.push(next);
+                    }
+                }
+                let kind = if terminated {
+                    TokenKind::Template(value)
+                } else {
+                    TokenKind::Error("unterminated template literal".to_owned())
                 };
                 push(&mut tokens, source, base, start, cursor, kind);
             }
@@ -221,6 +310,15 @@ pub fn lex(source: SourceId, base: usize, input: &str) -> Vec<Token> {
                 );
                 cursor += width;
             }
+        }
+    }
+    if indentation_sensitive {
+        while indentation.len() > 1 {
+            indentation.pop();
+            tokens.push(Token {
+                kind: TokenKind::Dedent,
+                span: Span::empty(source, base + input.len()),
+            });
         }
     }
     tokens.push(Token {
