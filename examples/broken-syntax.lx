@@ -3,4 +3,5 @@ console.log("Hello"
 
 ^rust
 fn main() {
-    println!("from repaired Rust")
+    println!("from valid Rust")
+}

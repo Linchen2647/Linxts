@@ -54,6 +54,40 @@ fn cli_uses_validated_local_ai_fallback() {
 }
 
 #[test]
+fn malformed_rust_does_not_invoke_configured_ai() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "linxts-rust-no-repair-{}-{unique}.lx",
+        std::process::id()
+    ));
+    std::fs::write(&path, "^rust\nfn main() { println!(\"Hello\")\n")
+        .expect("write source fixture");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_linxts"))
+        .arg("explain")
+        .arg(&path)
+        .arg("--no-cache")
+        .env("LINXTS_LLAMA_MINI_URL", "http://127.0.0.1:9")
+        .env("LINXTS_LLAMA_MINI_MODEL", "must-not-run")
+        .env_remove("LINXTS_LLAMA_3B_URL")
+        .env_remove("LINXTS_LLAMA_7B_URL")
+        .env_remove("LINXTS_LLAMA_LARGE_URL")
+        .output()
+        .expect("run linxts explain");
+
+    let _ = std::fs::remove_file(path);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stdout.contains("AI invoked: false"), "stdout: {stdout}");
+    assert!(stderr.contains("LXT-R02"), "stderr: {stderr}");
+    assert!(!stderr.contains("LXT-AI-"), "stderr: {stderr}");
+}
+
+#[test]
 fn models_list_reports_configured_mini_tier() {
     let output = Command::new(env!("CARGO_BIN_EXE_linxts"))
         .args(["models", "list"])

@@ -25,7 +25,7 @@ fn language_hints_and_repair_have_expected_output() {
     assert_eq!(execute("^這是python\nprint(\"Hello\")\n"), "Hello\n");
     assert_eq!(execute("^javascript\nconsole.log(\"Hello\"\n"), "Hello\n");
     assert_eq!(
-        execute("^rust\nfn main() {\n  println!(\"Hello\")\n"),
+        execute("^rust\nfn main() {\n  println!(\"Hello\")\n}\n"),
         "Hello\n"
     );
     assert_eq!(

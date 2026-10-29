@@ -15,6 +15,8 @@
 - [x] GitHub Actions configuration
 - [x] basic C adapter (`int main`, integer declarations, `printf`, return)
 - [x] Python indentation suites and `for ... in range(...)` lowering
+- [x] restrict automatic repair to Python, JavaScript, and C while requiring valid Rust/other syntax
+- [ ] expand language-specific Python, JavaScript, and C repair rules
 - [ ] broader Python and JavaScript/Rust/C subset coverage
 - [x] compilation cache for successful validated compilations
 

@@ -169,6 +169,26 @@ impl Compiler {
                 append_parse_diagnostics(&mut diagnostics, original.diagnostics);
                 continue;
             }
+            if !supports_deterministic_repair(language) {
+                append_parse_diagnostics(&mut diagnostics, original.diagnostics);
+                diagnostics.push(Diagnostic {
+                    code: "LXT-R02".to_owned(),
+                    severity: Severity::Error,
+                    stage: Stage::Repair,
+                    message: format!(
+                        "automatic syntax repair is not enabled for {language}; valid syntax is required"
+                    ),
+                    message_zh_tw: Some(format!(
+                        "{language}目前只接受正常語法，不啟用自動糾錯"
+                    )),
+                    span: Some(segment.span),
+                    suggestion: Some(
+                        "Use valid syntax for this language; automatic repair currently targets Python, JavaScript, and C."
+                            .to_owned(),
+                    ),
+                });
+                continue;
+            }
 
             let repaired = RepairEngine::repair(
                 source.id(),
@@ -229,6 +249,13 @@ impl Compiler {
             used_ai: false,
         }
     }
+}
+
+fn supports_deterministic_repair(language: Language) -> bool {
+    matches!(
+        language,
+        Language::Python | Language::JavaScript | Language::C
+    )
 }
 
 fn merge_unit(module: &mut Module, unit: ParsedUnit) {
@@ -572,6 +599,29 @@ mod tests {
         let result = compile("^javascript\nconsole.log(\"Hello\"\n");
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
         assert_eq!(result.repairs.len(), 1);
+    }
+
+    #[test]
+    fn repairs_python_javascript_and_c_only() {
+        for source in [
+            "^python\nprint(\"Hello)\n",
+            "^javascript\nconsole.log(\"Hello\"\n",
+            "^c\nint main(void) { printf(\"Hello\"); return 0;\n",
+        ] {
+            let result = compile(source);
+            assert!(!result.has_errors(), "{:?}", result.diagnostics);
+            assert!(!result.repairs.is_empty());
+        }
+    }
+
+    #[test]
+    fn malformed_rust_requires_valid_syntax_without_repair() {
+        let result = compile("^rust\nfn main() { println!(\"Hello\")\n");
+        assert!(result.has_errors());
+        assert!(result.repairs.is_empty());
+        assert!(result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "LXT-R02" && diagnostic.stage == Stage::Repair
+        }));
     }
 
     #[test]

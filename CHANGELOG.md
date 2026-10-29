@@ -15,6 +15,7 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Linxts Unified IR v0.2 with validated cross-language format expressions, tree-walking VM support, and native backend lowering.
 - Python indentation suites and one-, two-, or three-argument `for ... in range(...)` loops with positive or negative literal steps.
 - Deterministic Traditional/Simplified Chinese factorial intents and aggressive repair for misplaced numeric output-string quotes.
+- Language-specific repair policy: Python, JavaScript, and C remain repair-enabled while Rust and other code adapters require valid supported-subset syntax.
 - Mixed-language top-level variables and a deterministic Chinese intent subset.
 - VM and native integration coverage combining shared variables, cross-language function calls, loops, and formatting.
 - Versioned AI candidate protocol, recursive IR JSON Schema, and safety validation.

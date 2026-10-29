@@ -16,7 +16,7 @@ Linxts is split into a small number of working crates rather than one crate per 
 2. The hint scanner recognizes line-level `^` markers while tracking quoted strings.
 3. The detector scores syntax and token features. Explicit known hints take precedence.
 4. The parser produces IR and diagnostics without panicking. Python segments tokenize indentation boundaries; supported `for ... in range(...)` loops deterministically lower to an initializer plus condition-controlled loop. Failed parsing retains partial error nodes.
-5. In aggressive mode, deterministic repair runs for at most four passes and parsing is retried.
+5. In aggressive mode, Python, JavaScript, and C segments may enter at most four deterministic repair passes before parsing is retried. Rust and other code adapters require valid supported-subset syntax and emit `LXT-R02` instead of entering repair or AI fallback.
 6. Natural-language phrases covered by deterministic rules lower directly to IR.
 7. The deterministic IR validator rejects schema mismatches, unresolved error nodes, scope errors, bad calls, and excessive nesting.
 8. If only parser/validation errors remain and AI is enabled, configured local llama.cpp tiers are tried in Linxts-Mini → 3B → 7B → larger order. Linxts-Mini is a configurable router tier; no trained Mini weights are shipped yet. The router bounds health checks, retries, time, prompt/response size, context, output, cancellation, and escalation.

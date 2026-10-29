@@ -111,7 +111,7 @@ console.log(x)
 
 The current VM prints `10` and `50` for the mixed example. Integration coverage also exercises a Python-defined function called from JavaScript, a Rust-style loop over shared values, and formatted JavaScript/Rust/C output through both the VM and native bootstrap backend.
 
-A complete Simplified Chinese mixed example with aggressive repair and deterministic factorial lowering is available at [`examples/mixed-simplified.lx`](examples/mixed-simplified.lx):
+A complete Simplified Chinese mixed example with deterministic factorial lowering is available at [`examples/mixed-simplified.lx`](examples/mixed-simplified.lx):
 
 ```bash
 cargo run -p linxts-cli --offline -- run examples/mixed-simplified.lx --no-ai
@@ -123,7 +123,7 @@ cargo run -p linxts-cli --offline -- run examples/mixed-simplified.lx --no-ai
 5
 ```
 
-The Rust `rust()` function is repaired and compiled but is not executed because the source defines it without calling it. The C `main()` function runs after top-level Python and natural-language statements.
+The Rust `rust()` function uses valid subset syntax and is compiled but not executed because the source defines it without calling it. The C `main()` function runs after top-level Python and natural-language statements.
 
 ## Supported subset
 
@@ -138,7 +138,8 @@ The Rust `rust()` function is repaired and compiled but is not executed because 
 | C `int`/`void` functions, integer declarations, `printf`, and return | Implemented subset |
 | Brace-delimited `if` and `while` | Implemented subset |
 | Functions, calls, parameters, return | Implemented subset |
-| Missing quote/parenthesis/brace repair, misplaced numeric output-string quote repair, and selected typo repair | Implemented |
+| Missing quote/parenthesis/brace repair, misplaced numeric output-string quote repair, and selected typo repair | Implemented for Python, JavaScript, and C subsets |
+| Rust and other code adapters | Valid supported-subset syntax required; automatic repair disabled |
 | Chinese sum/even-range/factorial and simple variable arithmetic intents | Deterministic subset |
 | Python indentation and `for ... in range(...)` | Implemented subset; ranges lower to validated loop IR |
 | Full Python/JavaScript/Rust/C semantics | Not implemented |
