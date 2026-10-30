@@ -102,14 +102,50 @@ impl RepairEngine {
                 &mut records,
                 options,
             );
-            if language == Some(Language::Python) {
-                repair_python_missing_colons(
+            match language {
+                Some(Language::Python) => {
+                    repair_python_missing_colons(
+                        source,
+                        source_offset,
+                        &mut text,
+                        &mut records,
+                        options,
+                    );
+                    repair_python_range_typos(
+                        source,
+                        source_offset,
+                        &mut text,
+                        &mut records,
+                        options,
+                    );
+                    repair_bracketed_output_call(
+                        Language::Python,
+                        source,
+                        source_offset,
+                        &mut text,
+                        &mut records,
+                        options,
+                    );
+                }
+                Some(Language::JavaScript) => repair_bracketed_output_call(
+                    Language::JavaScript,
                     source,
                     source_offset,
                     &mut text,
                     &mut records,
                     options,
-                );
+                ),
+                Some(Language::C) => {
+                    repair_c_printf_missing_comma(
+                        source,
+                        source_offset,
+                        &mut text,
+                        &mut records,
+                        options,
+                    );
+                    repair_c_missing_semicolons(source, source_offset, &mut text, &mut records);
+                }
+                _ => {}
             }
             repair_misplaced_numeric_quote(source, source_offset, &mut text, &mut records, options);
             repair_delimiters(source, source_offset, &mut text, &mut records, options);
@@ -276,6 +312,213 @@ fn is_python_block_header(line: &str) -> bool {
         || line.starts_with("for ")
         || line.starts_with("def ")
         || line == "else"
+}
+
+fn repair_python_range_typos(
+    source: SourceId,
+    source_offset: usize,
+    text: &mut String,
+    records: &mut Vec<RepairRecord>,
+    options: RepairOptions,
+) {
+    if options.strict {
+        return;
+    }
+    for wrong in ["ragne", "rnage"] {
+        let mut search_start = 0;
+        while let Some(relative) = text[search_start..].find(wrong) {
+            let index = search_start + relative;
+            let end = index + wrong.len();
+            let line_start = text[..index].rfind('\n').map_or(0, |position| position + 1);
+            let prefix = text[line_start..index].trim();
+            if !prefix.starts_with("for ")
+                || !prefix.ends_with(" in")
+                || !text[end..].trim_start().starts_with('(')
+                || !outside_quotes(text, index)
+            {
+                search_start = end;
+                continue;
+            }
+            text.replace_range(index..end, "range");
+            push_record(
+                records,
+                Span::new(source, source_offset + index, source_offset + end),
+                wrong,
+                "range",
+                RepairType::Spelling,
+                "corrected a common Python range-call spelling error",
+                SemanticRisk::Medium,
+            );
+            search_start = index + "range".len();
+        }
+    }
+}
+
+fn repair_bracketed_output_call(
+    language: Language,
+    source: SourceId,
+    source_offset: usize,
+    text: &mut String,
+    records: &mut Vec<RepairRecord>,
+    options: RepairOptions,
+) {
+    if options.strict {
+        return;
+    }
+    let call = match language {
+        Language::Python => "print",
+        Language::JavaScript => "console.log",
+        _ => return,
+    };
+    let snapshot = text.clone();
+    let mut replacements = Vec::new();
+    let mut offset = 0;
+    for line in snapshot.split_inclusive('\n') {
+        let content = line.trim_end_matches(['\r', '\n']).trim_end();
+        let trimmed = content.trim_start();
+        let suffix = trimmed.strip_prefix(call);
+        let Some(arguments) = suffix.and_then(|suffix| suffix.strip_prefix('[')) else {
+            offset += line.len();
+            continue;
+        };
+        let arguments = arguments.strip_suffix(';').unwrap_or(arguments);
+        let Some(body) = arguments.strip_suffix(']') else {
+            offset += line.len();
+            continue;
+        };
+        if body.contains(['[', ']']) {
+            offset += line.len();
+            continue;
+        }
+        let indentation = content.len() - trimmed.len();
+        let opening = offset + indentation + call.len();
+        let closing = opening + 1 + body.len();
+        replacements.push((opening, closing));
+        offset += line.len();
+    }
+    for &(opening, closing) in replacements.iter().rev() {
+        text.replace_range(closing..closing + 1, ")");
+        text.replace_range(opening..opening + 1, "(");
+    }
+    for (opening, closing) in replacements {
+        push_record(
+            records,
+            Span::new(source, source_offset + opening, source_offset + closing + 1),
+            "[]",
+            "()",
+            RepairType::MissingDelimiter,
+            format!("replaced bracket delimiters on a {language} output call"),
+            SemanticRisk::Medium,
+        );
+    }
+}
+
+fn repair_c_printf_missing_comma(
+    source: SourceId,
+    source_offset: usize,
+    text: &mut String,
+    records: &mut Vec<RepairRecord>,
+    options: RepairOptions,
+) {
+    if options.strict {
+        return;
+    }
+    let mut search_start = 0;
+    while let Some(relative) = text[search_start..].find("printf(") {
+        let call_start = search_start + relative;
+        if !outside_quotes(text, call_start) {
+            search_start = call_start + "printf(".len();
+            continue;
+        }
+        let string_start = call_start + "printf(".len();
+        let arguments = &text[string_start..];
+        let Some(quote_offset) = arguments.find('"') else {
+            break;
+        };
+        if arguments
+            .find([')', ';', '\n', '\r'])
+            .is_some_and(|boundary| boundary < quote_offset)
+        {
+            search_start = string_start;
+            continue;
+        }
+        let opening_quote = string_start + quote_offset;
+        let mut escaped = false;
+        let mut closing_quote = None;
+        for (offset, character) in text[opening_quote + 1..].char_indices() {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                closing_quote = Some(opening_quote + 1 + offset);
+                break;
+            } else if character == '\n' {
+                break;
+            }
+        }
+        let Some(closing_quote) = closing_quote else {
+            search_start = opening_quote + 1;
+            continue;
+        };
+        let after_quote = closing_quote + 1;
+        let rest = &text[after_quote..];
+        let whitespace = rest.len() - rest.trim_start().len();
+        let Some(next) = rest[whitespace..].chars().next() else {
+            break;
+        };
+        if matches!(next, ',' | ')' | ';' | '\n' | '\r') {
+            search_start = after_quote;
+            continue;
+        }
+        text.insert(after_quote, ',');
+        push_record(
+            records,
+            Span::empty(source, source_offset + after_quote),
+            "",
+            ",",
+            RepairType::MissingDelimiter,
+            "inserted a missing comma after a C printf format string",
+            SemanticRisk::Medium,
+        );
+        search_start = after_quote + 1;
+    }
+}
+
+fn repair_c_missing_semicolons(
+    source: SourceId,
+    source_offset: usize,
+    text: &mut String,
+    records: &mut Vec<RepairRecord>,
+) {
+    let snapshot = text.clone();
+    let mut insertions = Vec::new();
+    let mut offset = 0;
+    for line in snapshot.split_inclusive('\n') {
+        let content = line.trim_end_matches(['\r', '\n']).trim_end();
+        let trimmed = content.trim_start();
+        let needs_semicolon = (trimmed.starts_with("return ") || trimmed.starts_with("printf("))
+            && !trimmed.ends_with([';', '{', '}'])
+            && !trimmed.contains("//");
+        if needs_semicolon {
+            insertions.push(offset + content.len());
+        }
+        offset += line.len();
+    }
+    for &insertion in insertions.iter().rev() {
+        text.insert(insertion, ';');
+    }
+    for insertion in insertions {
+        push_record(
+            records,
+            Span::empty(source, source_offset + insertion),
+            "",
+            ";",
+            RepairType::MissingTerminator,
+            "added a missing semicolon to a C statement",
+            SemanticRisk::Low,
+        );
+    }
 }
 
 fn repair_misplaced_numeric_quote(
@@ -491,6 +734,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn repairs_python_range_and_output_brackets() {
+        let result = RepairEngine::repair_for(
+            Language::Python,
+            SourceId(0),
+            0,
+            "for i in ragne(3):\n    print[i]\n",
+            RepairOptions::default(),
+        );
+        assert_eq!(result.text, "for i in range(3):\n    print(i)\n");
+        assert_eq!(result.records.len(), 2);
+    }
+
+    #[test]
+    fn repairs_javascript_output_brackets() {
+        let result = RepairEngine::repair_for(
+            Language::JavaScript,
+            SourceId(0),
+            0,
+            "console.log[\"javascript\"];\n",
+            RepairOptions::default(),
+        );
+        assert_eq!(result.text, "console.log(\"javascript\");\n");
+        assert_eq!(result.records.len(), 1);
+    }
+
+    #[test]
+    fn repairs_c_printf_comma_and_statement_terminators() {
+        let result = RepairEngine::repair_for(
+            Language::C,
+            SourceId(0),
+            0,
+            "printf(\"value=%d\" value)\nreturn 0\n",
+            RepairOptions::default(),
+        );
+        assert_eq!(result.text, "printf(\"value=%d\", value);\nreturn 0;\n");
+        assert_eq!(result.records.len(), 3);
+    }
+
+    #[test]
     fn adds_python_colon_only_for_indented_suite() {
         let result = RepairEngine::repair_for(
             Language::Python,
@@ -535,7 +817,7 @@ mod tests {
             "pritnf(\"c\")",
             RepairOptions::default(),
         );
-        assert_eq!(c.text, "printf(\"c\")");
+        assert_eq!(c.text, "printf(\"c\");");
 
         let python = RepairEngine::repair_for(
             Language::Python,

@@ -17,11 +17,11 @@ The compiler currently invokes automatic repair only for Python, JavaScript, and
 
 The first language-specific rules are:
 
-- Python: `pritn`/`pirnt` output-call typos and a missing `:` when a supported block header is immediately followed by a more-indented suite;
-- JavaScript: `consle.log` and `console,log` output-call typos;
-- C: `pritnf` and `printif` output-call typos.
+- Python: `pritn`/`pirnt` output-call typos, `ragne`/`rnage` in a `for ... in` range call, statement-level `print[...]` delimiters, and a missing `:` when a supported block header is immediately followed by a more-indented suite;
+- JavaScript: `consle.log` and `console,log` output-call typos plus statement-level `console.log[...]` delimiters;
+- C: `pritnf` and `printif` output-call typos, a missing comma after the first `printf` format string, and missing semicolons on standalone `printf` and `return` statements.
 
-Allowlisted language-specific rewrites run before parsing. This matters for typo-shaped function calls: they may be structurally parseable but would otherwise survive until IR validation as unknown functions. Every rewrite still emits a repair record and strict mode rejects these medium-risk changes.
+Allowlisted language-specific rewrites run before parsing. This matters for typo-shaped function calls: they may be structurally parseable but would otherwise survive until IR validation as unknown functions. Every rewrite still emits a repair record. Strict mode rejects the medium-risk spelling, colon, comma, and bracket-call rewrites; the low-risk C statement semicolon remains permitted.
 
 Aggressive mode accepts deterministic low- and medium-risk rules. Strict mode permits only low-risk repair, so it can close a parenthesis but will not infer a missing block brace or spelling correction.
 

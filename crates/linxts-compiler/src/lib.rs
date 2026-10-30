@@ -602,6 +602,19 @@ mod tests {
     }
 
     #[test]
+    fn repairs_extended_language_specific_patterns() {
+        for source in [
+            "^python\nfor i in ragne(2):\n    print[i]\n",
+            "^javascript\nconsole.log[\"javascript\"];\n",
+            "^c\nint main(void) {\n    int value = 7;\n    printf(\"value=%d\" value)\n    return 0\n}\n",
+        ] {
+            let result = compile(source);
+            assert!(!result.has_errors(), "{source}: {:?}", result.diagnostics);
+            assert!(!result.repairs.is_empty(), "{source}");
+        }
+    }
+
+    #[test]
     fn repairs_python_missing_block_colon() {
         let result = compile("^python\nvalue = 1\nif value > 0\n    print(value)\n");
         assert!(!result.has_errors(), "{:?}", result.diagnostics);

@@ -17,6 +17,7 @@
 - [x] Python indentation suites and `for ... in range(...)` lowering
 - [x] restrict automatic repair to Python, JavaScript, and C while requiring valid Rust/other syntax
 - [x] add proactive Python suite-colon and Python/JavaScript/C output-call typo repairs
+- [x] add Python range/bracket, JavaScript bracket, and C `printf` comma/semicolon repairs
 - [ ] expand language-specific Python, JavaScript, and C repair rules
 - [ ] broader Python and JavaScript/Rust/C subset coverage
 - [x] compilation cache for successful validated compilations

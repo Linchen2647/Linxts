@@ -44,6 +44,24 @@ fn simplified_chinese_mixed_sample_repairs_and_executes() {
 }
 
 #[test]
+fn extended_language_specific_repairs_execute() {
+    assert_eq!(
+        execute("^python\nfor i in ragne(2):\n    print[i]\n"),
+        "0\n1\n"
+    );
+    assert_eq!(
+        execute("^javascript\nconsole.log[\"javascript\"];\n"),
+        "javascript\n"
+    );
+    assert_eq!(
+        execute(
+            "^c\nint main(void) {\n    int value = 7;\n    printf(\"value=%d\" value)\n    return 0\n}\n"
+        ),
+        "value=7\n"
+    );
+}
+
+#[test]
 fn language_specific_repairs_execute() {
     assert_eq!(
         execute("^python\nvalue = 1\nif value > 0\n    print(value)\n"),
