@@ -151,26 +151,46 @@ impl Compiler {
                 continue;
             }
 
-            let mut trial_declared = declared.clone();
-            let original = Parser::parse(
+            let repair_enabled = options.aggressive && supports_deterministic_repair(language);
+            let repaired = repair_enabled.then(|| {
+                RepairEngine::repair_for(
+                    language,
+                    source.id(),
+                    segment.span.start,
+                    &segment.text,
+                    RepairOptions {
+                        strict: options.strict,
+                        ..RepairOptions::default()
+                    },
+                )
+            });
+            let candidate_text = repaired
+                .as_ref()
+                .map_or(segment.text.as_str(), |candidate| candidate.text.as_str());
+            let mut candidate_declared = declared.clone();
+            let parsed = Parser::parse(
                 source.id(),
                 segment.span.start,
-                &segment.text,
-                &mut trial_declared,
+                candidate_text,
+                &mut candidate_declared,
                 language == Language::Python,
             );
-            if original.is_complete() {
-                declared = trial_declared;
-                merge_unit(&mut module, original);
+            if parsed.is_complete() {
+                declared = candidate_declared;
+                merge_unit(&mut module, parsed);
+                if let Some(repaired) = repaired {
+                    repairs.extend(repaired.records.iter().cloned());
+                    append_repair_diagnostics(&mut diagnostics, repaired.records);
+                }
                 continue;
             }
 
             if !options.aggressive {
-                append_parse_diagnostics(&mut diagnostics, original.diagnostics);
+                append_parse_diagnostics(&mut diagnostics, parsed.diagnostics);
                 continue;
             }
             if !supports_deterministic_repair(language) {
-                append_parse_diagnostics(&mut diagnostics, original.diagnostics);
+                append_parse_diagnostics(&mut diagnostics, parsed.diagnostics);
                 diagnostics.push(Diagnostic {
                     code: "LXT-R02".to_owned(),
                     severity: Severity::Error,
@@ -190,42 +210,10 @@ impl Compiler {
                 continue;
             }
 
-            let repaired = RepairEngine::repair(
-                source.id(),
-                segment.span.start,
-                &segment.text,
-                RepairOptions {
-                    strict: options.strict,
-                    ..RepairOptions::default()
-                },
-            );
+            let repaired = repaired.expect("repair-enabled languages produce a candidate");
             repairs.extend(repaired.records.iter().cloned());
-            let mut repaired_declared = declared.clone();
-            let reparsed = Parser::parse(
-                source.id(),
-                segment.span.start,
-                &repaired.text,
-                &mut repaired_declared,
-                language == Language::Python,
-            );
-            if reparsed.is_complete() {
-                declared = repaired_declared;
-                merge_unit(&mut module, reparsed);
-                for record in repaired.records {
-                    diagnostics.push(Diagnostic {
-                        code: "LXT-R01".to_owned(),
-                        severity: Severity::Info,
-                        stage: Stage::Repair,
-                        message: format!("{}: {}", record.id, record.reason),
-                        message_zh_tw: Some(format!("{}：{}", record.id, record.reason)),
-                        span: Some(record.span),
-                        suggestion: None,
-                    });
-                }
-            } else {
-                merge_unit_without_diagnostics(&mut module, &reparsed);
-                append_parse_diagnostics(&mut diagnostics, reparsed.diagnostics);
-            }
+            merge_unit_without_diagnostics(&mut module, &parsed);
+            append_parse_diagnostics(&mut diagnostics, parsed.diagnostics);
         }
 
         for error in Validator::validate(&module) {
@@ -269,6 +257,18 @@ fn merge_unit_without_diagnostics(module: &mut Module, unit: &ParsedUnit) {
         .statements
         .extend(unit.block.statements.iter().cloned());
     module.functions.extend(unit.functions.iter().cloned());
+}
+
+fn append_repair_diagnostics(target: &mut Vec<Diagnostic>, records: Vec<RepairRecord>) {
+    target.extend(records.into_iter().map(|record| Diagnostic {
+        code: "LXT-R01".to_owned(),
+        severity: Severity::Info,
+        stage: Stage::Repair,
+        message: format!("{}: {}", record.id, record.reason),
+        message_zh_tw: Some(format!("{}：{}", record.id, record.reason)),
+        span: Some(record.span),
+        suggestion: None,
+    }));
 }
 
 fn append_parse_diagnostics(target: &mut Vec<Diagnostic>, diagnostics: Vec<ParseDiagnostic>) {
@@ -599,6 +599,38 @@ mod tests {
         let result = compile("^javascript\nconsole.log(\"Hello\"\n");
         assert!(!result.has_errors(), "{:?}", result.diagnostics);
         assert_eq!(result.repairs.len(), 1);
+    }
+
+    #[test]
+    fn repairs_python_missing_block_colon() {
+        let result = compile("^python\nvalue = 1\nif value > 0\n    print(value)\n");
+        assert!(!result.has_errors(), "{:?}", result.diagnostics);
+        assert!(
+            result
+                .repairs
+                .iter()
+                .any(|repair| repair.repaired_text == ":")
+        );
+    }
+
+    #[test]
+    fn repairs_language_specific_output_typos() {
+        for source in [
+            "^python\npritn(\"python\")\n",
+            "^javascript\nconsole,log(\"javascript\")\n",
+            "^c\nint main(void) { pritnf(\"c\"); return 0; }\n",
+        ] {
+            let result = compile(source);
+            assert!(!result.has_errors(), "{source}: {:?}", result.diagnostics);
+            assert!(
+                result
+                    .repairs
+                    .iter()
+                    .any(|repair| repair.repair_type == RepairType::Spelling),
+                "{source}: {:?}",
+                result.repairs
+            );
+        }
     }
 
     #[test]

@@ -16,6 +16,7 @@ All notable changes to Linxts will be documented here. The project follows Seman
 - Python indentation suites and one-, two-, or three-argument `for ... in range(...)` loops with positive or negative literal steps.
 - Deterministic Traditional/Simplified Chinese factorial intents and aggressive repair for misplaced numeric output-string quotes.
 - Language-specific repair policy: Python, JavaScript, and C remain repair-enabled while Rust and other code adapters require valid supported-subset syntax.
+- Proactive, allowlisted repair for missing Python suite colons and common Python/JavaScript/C output-call typos before unknown calls reach IR validation.
 - Mixed-language top-level variables and a deterministic Chinese intent subset.
 - VM and native integration coverage combining shared variables, cross-language function calls, loops, and formatting.
 - Versioned AI candidate protocol, recursive IR JSON Schema, and safety validation.

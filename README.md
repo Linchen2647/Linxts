@@ -150,6 +150,8 @@ The Rust `rust()` function uses valid subset syntax and is compiled but not exec
 | Linux x86_64 native executable | Implemented through an explicit system-C bootstrap backend |
 | Direct Cranelift/LLVM backend | Planned |
 
+Current language-specific repair includes missing Python suite colons when followed by an indented block, Python `pritn`/`pirnt`, JavaScript `consle.log`/`console,log`, and C `pritnf`/`printif`, in addition to bounded delimiter repair. These allowlisted rewrites run before parsing so misspelled calls that are syntactically call-shaped cannot survive into IR as unknown functions.
+
 The Python adapter recognizes space- or tab-indented suites after `:` and one-, two-, or three-argument `range` loops. The range step must be a nonzero integer literal; both ascending and descending ranges are supported. This remains a deliberate subset of Python rather than a Python runtime.
 
 Language adapters intentionally preserve distinct semantics as the project grows; syntax resemblance does not imply Python, JavaScript, Rust, and C are interchangeable.

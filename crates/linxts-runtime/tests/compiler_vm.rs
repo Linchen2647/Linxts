@@ -44,6 +44,22 @@ fn simplified_chinese_mixed_sample_repairs_and_executes() {
 }
 
 #[test]
+fn language_specific_repairs_execute() {
+    assert_eq!(
+        execute("^python\nvalue = 1\nif value > 0\n    print(value)\n"),
+        "1\n"
+    );
+    assert_eq!(
+        execute("^javascript\nconsole,log(\"javascript\")\n"),
+        "javascript\n"
+    );
+    assert_eq!(
+        execute("^c\nint main(void) { pritnf(\"c\"); return 0; }\n"),
+        "c\n"
+    );
+}
+
+#[test]
 fn natural_sum_has_expected_output() {
     assert_eq!(execute("幫我算出1到100的總和\n"), "5050\n");
 }

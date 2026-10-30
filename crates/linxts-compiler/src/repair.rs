@@ -1,3 +1,4 @@
+use crate::hints::Language;
 use linxts_source::{SourceId, Span};
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +65,27 @@ impl RepairEngine {
         input: &str,
         options: RepairOptions,
     ) -> RepairResult {
+        Self::repair_inner(None, source, source_offset, input, options)
+    }
+
+    #[must_use]
+    pub fn repair_for(
+        language: Language,
+        source: SourceId,
+        source_offset: usize,
+        input: &str,
+        options: RepairOptions,
+    ) -> RepairResult {
+        Self::repair_inner(Some(language), source, source_offset, input, options)
+    }
+
+    fn repair_inner(
+        language: Option<Language>,
+        source: SourceId,
+        source_offset: usize,
+        input: &str,
+        options: RepairOptions,
+    ) -> RepairResult {
         let mut text = input.to_owned();
         let mut records = Vec::new();
         let pass_limit = options.max_passes.min(MAX_REPAIR_PASSES);
@@ -72,7 +94,23 @@ impl RepairEngine {
         while passes < pass_limit {
             passes += 1;
             let before = text.clone();
-            repair_known_typos(source, source_offset, &mut text, &mut records, options);
+            repair_known_typos(
+                language,
+                source,
+                source_offset,
+                &mut text,
+                &mut records,
+                options,
+            );
+            if language == Some(Language::Python) {
+                repair_python_missing_colons(
+                    source,
+                    source_offset,
+                    &mut text,
+                    &mut records,
+                    options,
+                );
+            }
             repair_misplaced_numeric_quote(source, source_offset, &mut text, &mut records, options);
             repair_delimiters(source, source_offset, &mut text, &mut records, options);
             if text == before {
@@ -89,28 +127,53 @@ impl RepairEngine {
 }
 
 fn repair_known_typos(
+    language: Option<Language>,
     source: SourceId,
     source_offset: usize,
     text: &mut String,
     records: &mut Vec<RepairRecord>,
     options: RepairOptions,
 ) {
-    const TYPOS: [(&str, &str); 3] = [
+    const PYTHON_TYPOS: [(&str, &str); 2] = [("pritn", "print"), ("pirnt", "print")];
+    const JAVASCRIPT_TYPOS: [(&str, &str); 2] = [
         ("consle.log", "console.log"),
+        ("console,log", "console.log"),
+    ];
+    const C_TYPOS: [(&str, &str); 2] = [("pritnf", "printf"), ("printif", "printf")];
+    const ALL_TYPOS: [(&str, &str); 6] = [
         ("pritn", "print"),
         ("pirnt", "print"),
+        ("consle.log", "console.log"),
+        ("console,log", "console.log"),
+        ("pritnf", "printf"),
+        ("printif", "printf"),
     ];
-    for (wrong, correct) in TYPOS {
-        while let Some(index) = text.find(wrong) {
+    let typos: &[(&str, &str)] = match language {
+        Some(Language::Python) => &PYTHON_TYPOS,
+        Some(Language::JavaScript) => &JAVASCRIPT_TYPOS,
+        Some(Language::C) => &C_TYPOS,
+        Some(_) => &[],
+        None => &ALL_TYPOS,
+    };
+    for &(wrong, correct) in typos {
+        let mut search_start = 0;
+        while let Some(relative) = text[search_start..].find(wrong) {
+            let index = search_start + relative;
+            let end = index + wrong.len();
+            let valid_prefix = text[..index]
+                .chars()
+                .next_back()
+                .is_none_or(|character| !character.is_alphanumeric() && character != '_');
+            let valid_call = text[end..].trim_start().starts_with('(');
+            if !valid_prefix || !valid_call || !outside_quotes(text, index) {
+                search_start = end;
+                continue;
+            }
             if options.strict {
                 return;
             }
-            let span = Span::new(
-                source,
-                source_offset + index,
-                source_offset + index + wrong.len(),
-            );
-            text.replace_range(index..index + wrong.len(), correct);
+            let span = Span::new(source, source_offset + index, source_offset + end);
+            text.replace_range(index..end, correct);
             push_record(
                 records,
                 span,
@@ -120,8 +183,99 @@ fn repair_known_typos(
                 "recognized a common output-call spelling error",
                 SemanticRisk::Medium,
             );
+            search_start = index + correct.len();
         }
     }
+}
+
+fn outside_quotes(text: &str, index: usize) -> bool {
+    let mut single_quote = false;
+    let mut double_quote = false;
+    let mut escaped = false;
+    for character in text[..index].chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if character == '\\' && (single_quote || double_quote) {
+            escaped = true;
+            continue;
+        }
+        match character {
+            '\'' if !double_quote => single_quote = !single_quote,
+            '"' if !single_quote => double_quote = !double_quote,
+            _ => {}
+        }
+    }
+    !single_quote && !double_quote
+}
+
+fn repair_python_missing_colons(
+    source: SourceId,
+    source_offset: usize,
+    text: &mut String,
+    records: &mut Vec<RepairRecord>,
+    options: RepairOptions,
+) {
+    if options.strict {
+        return;
+    }
+    let snapshot = text.clone();
+    let mut lines = Vec::new();
+    let mut offset = 0;
+    for line in snapshot.split_inclusive('\n') {
+        let content = line.trim_end_matches(['\r', '\n']);
+        lines.push((offset, content.to_owned()));
+        offset += line.len();
+    }
+    if offset < snapshot.len() || snapshot.is_empty() {
+        lines.push((offset, snapshot[offset..].to_owned()));
+    }
+
+    let mut insertions = Vec::new();
+    for (line_index, (line_start, line)) in lines.iter().enumerate() {
+        let content = line.trim_end();
+        let trimmed = content.trim_start();
+        if trimmed.ends_with(':') || !is_python_block_header(trimmed) {
+            continue;
+        }
+        let current_indent = content.len() - trimmed.len();
+        let Some((_, next_line)) = lines[line_index + 1..]
+            .iter()
+            .find(|(_, candidate)| !candidate.trim().is_empty())
+        else {
+            continue;
+        };
+        let next_trimmed = next_line.trim_start();
+        let next_indent = next_line.len() - next_trimmed.len();
+        if next_indent <= current_indent {
+            continue;
+        }
+        insertions.push(line_start + content.len());
+    }
+
+    for &insertion in insertions.iter().rev() {
+        text.insert(insertion, ':');
+    }
+    for insertion in insertions {
+        push_record(
+            records,
+            Span::empty(source, source_offset + insertion),
+            "",
+            ":",
+            RepairType::MissingTerminator,
+            "added a missing colon before an indented Python suite",
+            SemanticRisk::Medium,
+        );
+    }
+}
+
+fn is_python_block_header(line: &str) -> bool {
+    line.starts_with("if ")
+        || line.starts_with("while ")
+        || line.starts_with("for ")
+        || line.starts_with("def ")
+        || line == "else"
 }
 
 fn repair_misplaced_numeric_quote(
@@ -335,6 +489,74 @@ fn push_record(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn adds_python_colon_only_for_indented_suite() {
+        let result = RepairEngine::repair_for(
+            Language::Python,
+            SourceId(0),
+            0,
+            "if value > 0\n    print(value)\n",
+            RepairOptions::default(),
+        );
+        assert_eq!(result.text, "if value > 0:\n    print(value)\n");
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].repair_type, RepairType::MissingTerminator);
+
+        let strict = RepairEngine::repair_for(
+            Language::Python,
+            SourceId(0),
+            0,
+            "if value > 0\n    print(value)\n",
+            RepairOptions {
+                strict: true,
+                ..RepairOptions::default()
+            },
+        );
+        assert_eq!(strict.text, "if value > 0\n    print(value)\n");
+        assert!(strict.records.is_empty());
+    }
+
+    #[test]
+    fn uses_language_specific_output_typos() {
+        let javascript = RepairEngine::repair_for(
+            Language::JavaScript,
+            SourceId(0),
+            0,
+            "console,log(\"js\")",
+            RepairOptions::default(),
+        );
+        assert_eq!(javascript.text, "console.log(\"js\")");
+
+        let c = RepairEngine::repair_for(
+            Language::C,
+            SourceId(0),
+            0,
+            "pritnf(\"c\")",
+            RepairOptions::default(),
+        );
+        assert_eq!(c.text, "printf(\"c\")");
+
+        let python = RepairEngine::repair_for(
+            Language::Python,
+            SourceId(0),
+            0,
+            "consle.log(\"not Python\")",
+            RepairOptions::default(),
+        );
+        assert_eq!(python.text, "consle.log(\"not Python\")");
+        assert!(python.records.is_empty());
+
+        let quoted = RepairEngine::repair_for(
+            Language::JavaScript,
+            SourceId(0),
+            0,
+            "console.log(\"consle.log(\")",
+            RepairOptions::default(),
+        );
+        assert_eq!(quoted.text, "console.log(\"consle.log(\")");
+        assert!(quoted.records.is_empty());
+    }
 
     #[test]
     fn repairs_javascript_parenthesis() {

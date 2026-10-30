@@ -15,6 +15,14 @@ Implemented rules close unmatched quotes, parentheses, brackets, and braces; cor
 
 The compiler currently invokes automatic repair only for Python, JavaScript, and C segments. Rust and other code adapters must parse successfully using their documented subset syntax; malformed segments receive `LXT-R02` and are not forwarded to AI fallback. This keeps correction work language-specific instead of applying cross-language guesses.
 
+The first language-specific rules are:
+
+- Python: `pritn`/`pirnt` output-call typos and a missing `:` when a supported block header is immediately followed by a more-indented suite;
+- JavaScript: `consle.log` and `console,log` output-call typos;
+- C: `pritnf` and `printif` output-call typos.
+
+Allowlisted language-specific rewrites run before parsing. This matters for typo-shaped function calls: they may be structurally parseable but would otherwise survive until IR validation as unknown functions. Every rewrite still emits a repair record and strict mode rejects these medium-risk changes.
+
 Aggressive mode accepts deterministic low- and medium-risk rules. Strict mode permits only low-risk repair, so it can close a parenthesis but will not infer a missing block brace or spelling correction.
 
 Repair does not introduce file access, process execution, networking, secret handling, deletion, or any capability not already explicit in the source. Parser and validator limits prevent unbounded retry or nesting behavior.
